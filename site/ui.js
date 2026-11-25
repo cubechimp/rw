@@ -143,7 +143,8 @@ function sayEmote(i) {
   P.emote = i; P.emoteT = Date.now(); if (myBubble) myBubble.removeFromParent();
   myBubble = textSprite([EMOTES[i]], { w: 384, h: 110, stroke: '#ff4fa3' }); myBubbleT = 4; (INSIDE ? inScene : scene).add(myBubble); if (i === 0) learn('haisai'); if (i === 1) learn('maasan'); if (i === 2) learn('churasan'); pluck(5 - i, .3);
 }
-function jump() { if (!started || modalOpen || P.air || P.diving) return; P.air = true; P.vy = P.mode === 'sea' ? 7.5 + P.speed * .12 : 6; P.spin = P.mode === 'sea' && P.speed > 14 ? 1 : 0; if (P.mode === 'sea') { splash(P.x - OX, P.z - OZ, 10, 4); splashSfx(.18); } }
+function canHop() { return started && !chill && !INSIDE && !P.fly && !P.diving && P.mode === 'land' && (P.land === 'bike' || P.land === 'kart'); }      // bunny hops are for the bicycle and the go-kart
+function jump() { if (!canHop() || modalOpen || P.air) return; P.air = true; P.vy = 8.5; P.spin = 0; }      // 8.5 m/s up: about 1.8 m, twice the old hop
 
 /* ---------------- player ---------------- */
 function nearestPlace(onlyNew) { let best = null; for (const p of PLACES) { if (onlyNew && S.stamps[p.id]) continue; if (!best || p.dist < best.dist) best = p; } return best; }
@@ -340,7 +341,7 @@ function openMap(region, sel) {
 let hudT = 0, curMuni = '';
 const mini = $('#mini'), mc = mini.getContext('2d');
 function updateHud(dt) {
-  hudT -= dt; const a = currentAction(), ab = $('#act'); ab.hidden = !a; if (a && ab.textContent !== a.label) ab.textContent = a.label; syncRideButtons();
+  hudT -= dt; const a = currentAction(), ab = $('#act'); ab.hidden = !a; if (a && ab.textContent !== a.label) ab.textContent = a.label; syncRideButtons(); const hb = $('#bJump'), ch = canHop(); if (hb.hidden === ch) hb.hidden = !ch;
   if (hudT > 0) return; hudT = .25;
   let code = ''; for (const r of muniRings) { if (P.x < r.bb[0] || P.x > r.bb[2] || P.z < r.bb[1] || P.z > r.bb[3]) continue; if (inRing(r, P.x, P.z)) { code = r.code; break; } }
   const ll = xz2ll(P.x, P.z), loc = $('#loc'), m = DATA.muni[code];
