@@ -1,11 +1,11 @@
 /* Ryukyu World: player, controls, sound, menus, online presence, main loop. */
 'use strict';
 const SAVE_KEY = 'ryukyu-world-v1';
-const S = { name: [Math.floor(Math.random() * 12), Math.floor(Math.random() * 12)], color: Math.floor(Math.random() * 7), stamps: {}, foods: {}, words: {}, fish: {}, glass: 4, pos: null, craft: 'jetski', muted: false, bike: true, gba: true };
+const S = { name: [Math.floor(Math.random() * 12), Math.floor(Math.random() * 12)], color: Math.floor(Math.random() * 7), stamps: {}, foods: {}, words: {}, fish: {}, glass: 4, pos: null, craft: 'jetski', muted: false, land: 'bike', gba: true };
 try { const j = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); if (j && typeof j === 'object') Object.assign(S, j); } catch (e) { /* no storage: play without saving */ }
 function save() { try { S.pos = [Math.round(P.x), Math.round(P.z)]; localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch (e) { /* ignore */ } }
 
-const P = { x: 0, z: 0, y: 0, h: 0, speed: 0, mode: 'land', craft: S.craft, diving: false, jy: 0, vy: 0, air: false, spin: 0, emote: 0, emoteT: 0, buffT: 0, luckT: 0, gh: 0, bike: true };
+const P = { x: 0, z: 0, y: 0, h: 0, speed: 0, mode: 'land', craft: S.craft, diving: false, jy: 0, vy: 0, air: false, spin: 0, emote: 0, emoteT: 0, buffT: 0, luckT: 0, gh: 0, land: 'bike' };
 const cam = { yaw: 0, pitch: .2, dist: 9, lastDrag: -10 };
 let me = null, myBubble = null, myBubbleT = 0, started = false, modalOpen = false, chill = false, tNow = 0, ROOM = null, onlineN = 0;
 const inp = { jx: 0, jy: 0, boost: false };
@@ -69,8 +69,10 @@ addEventListener('keydown', (e) => {
   if (e.code === 'Escape' && modalOpen) closeModal();
   if (modalOpen) return;
   if (e.code === 'KeyE') doAction(); if (e.code === 'KeyM') openMap(); if (e.code === 'KeyP') openPassport(); if (e.code === 'Space') { e.preventDefault(); jump(); }
-  if (e.code === 'KeyB') toggleBike(); if (e.code === 'KeyF') toggleFly();
-  if (e.code === 'Digit1') setCraft('jetski'); if (e.code === 'Digit2') setCraft('sabani'); if (e.code === 'Digit3') setCraft('sup');
+  if (INSIDE) return;
+  if (e.code === 'KeyF') toggleFly();
+  if (P.mode === 'land' && !P.fly) { if (e.code === 'KeyB' || e.code === 'Digit1') setLand('bike'); if (e.code === 'KeyK' || e.code === 'Digit2') setLand('kart'); if (e.code === 'KeyC' || e.code === 'Digit3') setLand('kei'); }
+  else if (!P.fly) { if (e.code === 'Digit1') setCraft('jetski'); if (e.code === 'Digit2') setCraft('sabani'); if (e.code === 'Digit3') setCraft('sup'); }
 });
 addEventListener('keyup', (e) => { keys[e.code] = false; });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; inp.boost = false; });
@@ -88,7 +90,7 @@ addEventListener('blur', () => { for (const k in keys) keys[k] = false; inp.boos
   canvas.addEventListener('wheel', (e) => { cam.dist = clamp(cam.dist + e.deltaY * .01, 5, 40); }, { passive: true });
   const bb = $('#bBoost'); bb.addEventListener('pointerdown', (e) => { inp.boost = true; bb.classList.add('on'); bb.setPointerCapture(e.pointerId); });
   for (const ev of ['pointerup', 'pointercancel']) bb.addEventListener(ev, () => { inp.boost = false; bb.classList.remove('on'); });
-  $('#bJump').addEventListener('click', jump); $('#bBike').addEventListener('click', toggleBike); $('#bFly').addEventListener('click', toggleFly);
+  $('#bJump').addEventListener('click', jump); for (const b of document.querySelectorAll('[data-land]')) b.addEventListener('click', () => setLand(b.dataset.land)); $('#bFly').addEventListener('click', toggleFly);
   $('#style').addEventListener('click', () => { S.gba = !S.gba; applyStyle(); save(); }); $('#act').addEventListener('click', doAction);
   $('#bMap').addEventListener('click', openMap); $('#bBook').addEventListener('click', openPassport);
   $('#bSky').addEventListener('click', () => { moodAuto = false; moodT = (Math.floor(moodT) + 1) % 3; const m = MOODS[Math.floor(moodT)]; toast(m.name, m.jp); });
@@ -102,9 +104,20 @@ function setCraft(c, quiet) {
   P.craft = S.craft = c; for (const b of document.querySelectorAll('[data-craft]')) b.classList.toggle('sel', b.dataset.craft === c);
   if (started && !quiet) toast(CRAFT_INFO[c].label, c === 'sabani' ? 'A traditional Okinawan fishing canoe under sail.' : c === 'sup' ? 'Slow down. Listen to the lagoon.' : 'Hold Boost to fly across the bay.');
 }
-function toggleBike() { P.bike = S.bike = !P.bike; $('#bBike').classList.toggle('sel', P.bike); if (started) toast(P.bike ? 'Bicycle' : 'On foot', P.bike ? 'As fast on land as the jet ski on water.' : 'Bouncy walking.'); save(); }
+function setLand(v, quiet) {      // tap the ride you are on to get off and walk
+  if (!quiet && (!started || modalOpen || chill || INSIDE)) return;
+  P.land = S.land = !quiet && P.land === v ? 'foot' : v; for (const b of document.querySelectorAll('[data-land]')) b.classList.toggle('sel', b.dataset.land === P.land);
+  if (!quiet) { const L = LAND[P.land]; toast(L ? L.label : 'On foot', L ? L.tip : 'Bouncy walking.'); save(); }
+}
+function toggleBike() { setLand('bike'); }
+let rideCtx = '';
+function syncRideButtons() {      // land rides and the plane on land, boats on the water
+  const ctx = INSIDE ? 'in' : P.fly ? 'air' : P.mode === 'sea' ? 'sea' : 'land'; if (ctx === rideCtx) return; rideCtx = ctx;
+  for (const b of document.querySelectorAll('.crafts [data-ctx]')) b.hidden = !b.dataset.ctx.split(' ').includes(ctx);
+}
 function toggleFly() {
-  if (!started || modalOpen || chill || P.diving) return;
+  if (!started || modalOpen || chill || P.diving || INSIDE) return;
+  if (!P.fly && P.mode !== 'land') { toast('Seaplane', 'It takes off from land. Head for the shore first.'); return; }
   if (!P.fly) { P.fly = true; P.landing = false; P.vy = 12; P.y += 2; P.speed = Math.max(P.speed, 32); P.air = false; P.jy = 0; toast('Seaplane', 'Stick up to climb, down to descend. Touch down gently to land, on sea or land.'); }
   else { P.landing = !P.landing; toast(P.landing ? 'Coming in to land' : 'Climbing again', ''); }
   $('#bFly').classList.toggle('sel', P.fly);
@@ -112,7 +125,7 @@ function toggleFly() {
 function flyStep(dt, ix, iy) {
   const boosting = inp.boost || keys.ShiftLeft || keys.ShiftRight; P.speed += clamp((boosting ? 120 : 62) - P.speed, -30 * dt, 26 * dt);
   P.bank = lerp(P.bank || 0, clamp(ix, -1, 1), dt * 3); P.h += P.bank * 1.05 * dt; P.vy = lerp(P.vy, P.landing ? -22 : clamp(iy, -1, 1) * 24, dt * 2.5);
-  const nx = clamp(P.x + Math.sin(P.h) * P.speed * dt, -498000, 365000), nz = clamp(P.z - Math.cos(P.h) * P.speed * dt, -190000, 242000), gh = heightAt(nx, nz), floor = Math.max(gh, 0);
+  const nx = clamp(P.x + Math.sin(P.h) * P.speed * dt, -498000, 365000), nz = clamp(P.z - Math.cos(P.h) * P.speed * dt, -190000, 242000), gh = groundAt(nx, nz), floor = Math.max(gh, 0);
   let y = P.y + P.vy * dt;
   if (nahaBlocked(nx, nz, y - 1)) { y = P.y + 14 * dt; P.vy = 14; }      // too low over a roof: pull up
   if (y <= floor + 1.3 && P.vy < 0 && (P.landing || iy < -.3)) {
@@ -124,18 +137,24 @@ function flyStep(dt, ix, iy) {
   poseIslander(me, P.fly ? 'air' : P.mode, P.craft, false, tNow, P.speed, { dt });
   if (engineGain) { engineGain.gain.value = lerp(engineGain.gain.value, S.muted ? 0 : .05, .1); engineOsc.frequency.value = 70 + P.speed * .7; }
 }
-function inspectAt(x, y) { const r = nahaPick(x, y); if (r) toast(r.title, r.text); }
+function inspectAt(x, y) { if (INSIDE) return; const r = nahaPick(x, y); if (r && r.poi) openBiz(r.poi); else if (r) toast(r.title, r.text); }
 function applyStyle() { document.body.classList.toggle('gba', S.gba !== false); $('#style').textContent = 'Menu style: ' + (S.gba !== false ? 'Pixel' : 'Aero'); }
 function sayEmote(i) {
-  P.emote = i; P.emoteT = Date.now(); if (myBubble) scene.remove(myBubble);
-  myBubble = textSprite([EMOTES[i]], { w: 384, h: 110, stroke: '#ff4fa3' }); myBubbleT = 4; scene.add(myBubble); if (i === 0) learn('haisai'); if (i === 1) learn('maasan'); if (i === 2) learn('churasan'); pluck(5 - i, .3);
+  P.emote = i; P.emoteT = Date.now(); if (myBubble) myBubble.removeFromParent();
+  myBubble = textSprite([EMOTES[i]], { w: 384, h: 110, stroke: '#ff4fa3' }); myBubbleT = 4; (INSIDE ? inScene : scene).add(myBubble); if (i === 0) learn('haisai'); if (i === 1) learn('maasan'); if (i === 2) learn('churasan'); pluck(5 - i, .3);
 }
 function jump() { if (!started || modalOpen || P.air || P.diving) return; P.air = true; P.vy = P.mode === 'sea' ? 7.5 + P.speed * .12 : 6; P.spin = P.mode === 'sea' && P.speed > 14 ? 1 : 0; if (P.mode === 'sea') { splash(P.x - OX, P.z - OZ, 10, 4); splashSfx(.18); } }
 
 /* ---------------- player ---------------- */
 function nearestPlace(onlyNew) { let best = null; for (const p of PLACES) { if (onlyNew && S.stamps[p.id]) continue; if (!best || p.dist < best.dist) best = p; } return best; }
 function currentAction() {
+  if (INSIDE) return insideAction();
   if (P.fly) return { label: P.landing ? 'Climb again' : 'Land the plane', fn: toggleFly };
+  if (P.mode === 'land' && P.speed < 16) {      // at a restaurant door
+    const d = shopsAtDoor();
+    if (d.length === 1 || (d.length > 1 && d[1].dr - d[0].dr > 1.2)) return { label: 'Go into ' + (d[0].name.length > 18 ? d[0].name.slice(0, 17) + '…' : d[0].name), fn: () => enterShop(d[0]) };
+    if (d.length > 1) return { label: 'Go inside (' + d.length + ' places here)', fn: () => { const l = el('div', { class: 'acts' }); for (const q of d.slice(0, 14)) l.append(el('button', { class: 'act', on: { click: () => enterShop(q) } }, el('span', { class: 'ic' }, SHOP[q.kind].icon), el('span', null, el('b', null, q.full), el('small', null, q.addr || SHOP[q.kind].label)))); openModal(el('div', null, el('h2', { id: 'mTitle' }, 'This doorway', el('small', null, d.length + ' places share it')), l)); } };
+  }
   if (P.diving) return { label: 'Surface', fn: () => { P.diving = false; turtle.visible = false; splash(P.x - OX, P.z - OZ, 14, 3); splashSfx(.2); } };
   const p = nearestPlace(false); if (p && p.dist < 70) return { label: 'Visit ' + p.en, fn: () => openPlace(p) };
   if (P.mode === 'sea' && P.gh < -1.3 && P.speed < 6) return { label: 'Snorkel here', fn: startDive };
@@ -151,10 +170,11 @@ function updatePlayer(dt) {
   let ix = inp.jx, iy = inp.jy;
   if (keys.KeyA || keys.ArrowLeft) ix -= 1; if (keys.KeyD || keys.ArrowRight) ix += 1; if (keys.KeyW || keys.ArrowUp) iy += 1; if (keys.KeyS || keys.ArrowDown) iy -= 1;
   if (modalOpen || chill) ix = iy = 0;
+  if (INSIDE) { insideStep(dt, ix, iy); return; }
   if (P.fly) { flyStep(dt, ix, iy); return; }
   const mag = Math.min(1, Math.hypot(ix, iy)), sea = P.mode === 'sea', ci = CRAFT_INFO[P.craft];
-  const biking = !sea && P.bike && !chill;
-  let maxS = P.diving ? 3.2 : sea ? ci.max : biking ? 26 : 7.5, turn = P.diving ? 5 : sea ? ci.turn : biking ? 3.4 : 10, acc = P.diving ? 6 : sea ? ci.acc : biking ? 16 : 30;
+  const ride = !sea && !chill ? LAND[P.land] : null, biking = !!ride;
+  let maxS = P.diving ? 3.2 : sea ? ci.max : ride ? ride.max : 7.5, turn = P.diving ? 5 : sea ? ci.turn : ride ? ride.turn : 10, acc = P.diving ? 6 : sea ? ci.acc : ride ? ride.acc : 30;
   const boosting = (inp.boost || keys.ShiftLeft || keys.ShiftRight) && mag > .1 && !P.diving;      // no cooldown
   if (boosting) maxS *= sea ? 1.6 : 1.7;
   if (P.buffT > 0) { P.buffT -= dt; maxS *= 1.15; } if (P.luckT > 0) P.luckT -= dt;
@@ -170,10 +190,10 @@ function updatePlayer(dt) {
     if (!nahaBlocked(nx, P.z, P.y + .5)) nz = P.z; else if (!nahaBlocked(P.x, nz, P.y + .5)) nx = P.x; else { nx = P.x; nz = P.z; }
     P.speed *= Math.max(0, 1 - dt * 5);
   }
-  let gh = heightAt(nx, nz);
+  let gh = groundAt(nx, nz);
   if (sea) {
     if (P.diving) { if (gh > -1.0) { nx = P.x; nz = P.z; gh = P.gh; P.speed = 0; } }
-    else if (gh > .55) { P.mode = 'land'; if (!P.bike) P.speed = Math.min(P.speed, 5); splash(nx - OX, nz - OZ, 8, 3); }
+    else if (gh > .55) { P.mode = 'land'; if (!LAND[P.land]) P.speed = Math.min(P.speed, 5); splash(nx - OX, nz - OZ, 8, 3); }
   } else if (gh < -.5 && !P.air) { P.mode = 'sea'; splash(nx - OX, nz - OZ, 14, 4); splashSfx(.25); if (!S.launched) { S.launched = 1; toast('On the water', 'Hold Boost and look for glowing Ryukyu glass floats.'); } }
   P.x = nx; P.z = nz; P.gh = gh;
   const surf = waveH(P.x - OX, P.z - OZ, tNow);
@@ -196,9 +216,13 @@ function updatePlayer(dt) {
     me.rotation.x = clamp(fwd * .35 + (P.air ? P.vy * .03 : 0) + (boosting ? .08 : 0), -.5, .5); me.rotation.z = -(P.lean || 0);
     if (P.spin) me.rotation.y = -P.h + (1 - Math.max(0, P.vy + 7.5) / 15) * Math.PI * 2;
   }
-  const onBike = P.mode === 'land' && P.bike && !chill; if (onBike) me.rotation.z = -(P.lean || 0);
-  poseIslander(me, chill ? 'sit' : P.mode, P.craft, P.diving, tNow, P.speed, { dt, biking: onBike, air: P.air });
-  if (engineGain) { const on = P.mode === 'sea' && P.craft === 'jetski' && !P.diving && !S.muted; engineGain.gain.value = lerp(engineGain.gain.value, on ? .012 + Math.min(.05, P.speed * .0018) : 0, .1); engineOsc.frequency.value = 46 + P.speed * 3.2; }
+  const onRide = P.mode === 'land' && !chill && LAND[P.land] ? P.land : null;
+  if (onRide) {      // wheels follow the slope; the bicycle leans into a turn, the cars roll out of it
+    const e = 1.2, sl = groundAt(P.x + Math.sin(P.h) * e, P.z - Math.cos(P.h) * e) - groundAt(P.x - Math.sin(P.h) * e, P.z + Math.cos(P.h) * e);
+    P.pitch = lerp(P.pitch || 0, P.air ? 0 : clamp(Math.atan2(sl, 2.4), -.5, .5), dt * 8); me.rotation.x = P.pitch; me.rotation.z = onRide === 'bike' ? -(P.lean || 0) : (P.lean || 0) * .3;
+  }
+  poseIslander(me, chill ? 'sit' : P.mode, P.craft, P.diving, tNow, P.speed, { dt, ride: onRide, air: P.air });
+  if (engineGain) { const car = onRide === 'kart' || onRide === 'kei', on = ((P.mode === 'sea' && P.craft === 'jetski' && !P.diving) || (car && P.speed > .5)) && !S.muted; engineGain.gain.value = lerp(engineGain.gain.value, on ? .012 + Math.min(.05, P.speed * .0018) : 0, .1); engineOsc.frequency.value = (P.mode === 'land' && P.land === 'kei' ? 38 : 46) + P.speed * (P.mode === 'land' && P.land === 'kei' ? 2 : 3.2); }
   // glass floats
   const now = performance.now();
   for (const ch of nearChunks.values()) for (const o of ch.orbs) {
@@ -216,6 +240,7 @@ function updatePlayer(dt) {
 function logFish(i) { S.fish[i] = 1; const f = DATA.fish[i]; toast('Sea life: ' + f[0], f[1] + ' · ' + f[2]); ding(880, 1320); save(); }
 
 function updateCamera(dt) {
+  if (INSIDE) { insideCam(); return; }
   const moving = P.speed > 1.5;
   if (!started) { cam.yaw = P.h + Math.sin(tNow * .12) * .7; cam.pitch = .2; cam.dist = 13; }
   else if (chill) { cam.yaw = lerp(cam.yaw, -Math.PI / 2 + Math.sin(tNow * .1) * .25, dt); cam.pitch = lerp(cam.pitch, .08, dt); cam.dist = lerp(cam.dist, 7, dt); }
@@ -223,7 +248,7 @@ function updateCamera(dt) {
   const dist = P.diving ? Math.min(cam.dist, 5.5) : P.fly ? cam.dist + 9 + P.speed * .05 : cam.dist + (started ? P.speed * .13 : 0), pitch = P.diving ? Math.min(cam.pitch, .12) : cam.pitch;
   const tx = P.x - OX, ty = P.y + (P.diving ? .4 : 2.1), tz = P.z - OZ, cp = Math.cos(pitch);
   let cx = tx - Math.sin(cam.yaw) * dist * cp, cz = tz + Math.cos(cam.yaw) * dist * cp, cy = ty + dist * Math.sin(pitch) + .4;
-  const g = heightAt(cx + OX, cz + OZ);
+  const g = groundAt(cx + OX, cz + OZ);
   if (P.diving) cy = Math.min(Math.max(cy, g + .5), -.45); else cy = Math.max(cy, Math.max(g, 0) + 1.1);
   camera.position.set(cx, cy, cz); camera.lookAt(tx, ty, tz);
   const want = 62 + clamp((P.speed - 22) * .7, 0, 14); if (Math.abs(camera.fov - want) > .1) { camera.fov = lerp(camera.fov, want, dt * 3); camera.updateProjectionMatrix(); }
@@ -235,7 +260,7 @@ function rebase(x, z) {
   planChunks(x, z); pumpChunks(1e9); rebuildInstances(); syncNaha();
   for (let i = 0; i < PN; i++) pLife[i] = 0;
 }
-function setPos(x, z) { P.fly = false; P.landing = false; $('#bFly').classList.remove('sel'); P.x = x; P.z = z; P.speed = 0; P.diving = false; P.air = false; P.jy = 0; turtle.visible = false; const h = heightAt(x, z); P.gh = h; P.mode = h > .3 ? 'land' : 'sea'; P.y = Math.max(h, 0); rebase(x, z); }
+function setPos(x, z) { if (INSIDE) { INSIDE = null; scene.add(me); } P.fly = false; P.landing = false; $('#bFly').classList.remove('sel'); P.x = x; P.z = z; P.speed = 0; P.diving = false; P.air = false; P.jy = 0; turtle.visible = false; const h = heightAt(x, z); P.gh = h; P.mode = h > .3 ? 'land' : 'sea'; P.y = Math.max(h, 0); rebase(x, z); }
 function travelTo(x, z, label) {
   closeModal(); const f = $('#fade'); f.textContent = label; f.classList.add('on');
   setTimeout(() => { setPos(x, z); cam.yaw = P.h; save(); setTimeout(() => f.classList.remove('on'), 150); }, 520);
@@ -315,11 +340,11 @@ function openMap(region, sel) {
 let hudT = 0, curMuni = '';
 const mini = $('#mini'), mc = mini.getContext('2d');
 function updateHud(dt) {
-  hudT -= dt; const a = currentAction(), ab = $('#act'); ab.hidden = !a; if (a && ab.textContent !== a.label) ab.textContent = a.label;
+  hudT -= dt; const a = currentAction(), ab = $('#act'); ab.hidden = !a; if (a && ab.textContent !== a.label) ab.textContent = a.label; syncRideButtons();
   if (hudT > 0) return; hudT = .25;
   let code = ''; for (const r of muniRings) { if (P.x < r.bb[0] || P.x > r.bb[2] || P.z < r.bb[1] || P.z > r.bb[3]) continue; if (inRing(r, P.x, P.z)) { code = r.code; break; } }
   const ll = xz2ll(P.x, P.z), loc = $('#loc'), m = DATA.muni[code];
-  loc.firstChild.textContent = m ? m[1] + ' ' + m[0] : 'On the water 海上'; loc.lastChild.textContent = P.fly ? 'Altitude ' + Math.round(P.y) + ' m · ' + Math.round(P.speed * 3.6) + ' km/h' : ll[1].toFixed(4) + '°N  ' + ll[0].toFixed(4) + '°E';
+  loc.firstChild.textContent = INSIDE ? INSIDE.q.name : m ? m[1] + ' ' + m[0] : 'On the water 海上'; loc.lastChild.textContent = INSIDE ? (INSIDE.q.addr || SHOP[INSIDE.q.kind].label).slice(0, 44) : P.fly ? 'Altitude ' + Math.round(P.y) + ' m · ' + Math.round(P.speed * 3.6) + ' km/h' : ll[1].toFixed(4) + '°N  ' + ll[0].toFixed(4) + '°E';
   if (code !== curMuni) { curMuni = code; }
   const tp = nearestPlace(true) || nearestPlace(false), tg = $('#target');
   if (tp) { const br = Math.atan2(tp.x - P.x, -(tp.z - P.z)) - cam.yaw; tg.firstChild.style.transform = `rotate(${br}rad)`; tg.lastChild.textContent = tp.en + ' · ' + fmtDist(tp.dist); }
@@ -340,7 +365,7 @@ let lastSent = '';
 function readPeer(pr) {
   const s = pr.presence || {}, num = (v) => typeof v === 'number' && isFinite(v); if (!num(s.x) || !num(s.z)) return null;
   const n = Array.isArray(s.n) ? [s.n[0] | 0, s.n[1] | 0] : [0, 0], c = num(s.c) ? clamp(Math.round(s.c), 0, 7) : 0;
-  return { x: clamp(s.x, -6e5, 6e5), z: clamp(s.z, -6e5, 6e5), y: num(s.y) ? clamp(s.y, -10, 600) : 0, h: num(s.h) ? s.h : 0, m: num(s.m) ? clamp(Math.round(s.m), 0, 5) : 0, d: s.d ? 1 : 0, n, c, e: num(s.e) ? clamp(Math.round(s.e), 0, 2) : 0, et: num(s.et) ? s.et : 0, nk: n.join('_') + '_' + c };
+  return { x: clamp(s.x, -6e5, 6e5), z: clamp(s.z, -6e5, 6e5), y: num(s.y) ? clamp(s.y, -10, 600) : 0, h: num(s.h) ? s.h : 0, m: num(s.m) ? clamp(Math.round(s.m), 0, 8) : 0, i: num(s.i) ? s.i >>> 0 : 0, ix: num(s.ix) ? clamp(s.ix, -5, 5) : 0, iz: num(s.iz) ? clamp(s.iz, -5, 5) : 0, d: s.d ? 1 : 0, n, c, e: num(s.e) ? clamp(Math.round(s.e), 0, 2) : 0, et: num(s.et) ? s.et : 0, nk: n.join('_') + '_' + c };
 }
 async function initRoom() {
   let room = null; try { room = window.claude && window.claude.use ? await window.claude.use('room') : null; } catch (e) { room = null; }
@@ -355,7 +380,7 @@ async function initRoom() {
   } catch (e) { ROOM = null; return; }
   setInterval(() => {
     if (!ROOM || !started) return;
-    const st = { x: Math.round(P.x * 10) / 10, z: Math.round(P.z * 10) / 10, y: Math.round(P.y * 10) / 10, h: Math.round(P.h * 100) / 100, m: P.fly ? 5 : P.mode === 'land' ? (P.bike ? 4 : 0) : CRAFTS.indexOf(P.craft) + 1, d: P.diving ? 1 : 0, n: S.name, c: S.color, e: P.emote, et: P.emoteT };
+    const st = { x: Math.round(P.x * 10) / 10, z: Math.round(P.z * 10) / 10, y: Math.round(P.y * 10) / 10, h: Math.round(P.h * 100) / 100, m: INSIDE ? 8 : P.fly ? 5 : P.mode === 'land' ? (LAND[P.land] ? LAND[P.land].m : 0) : CRAFTS.indexOf(P.craft) + 1, d: P.diving ? 1 : 0, n: S.name, c: S.color, e: P.emote, et: P.emoteT }; if (INSIDE) { st.i = INSIDE.id; st.ix = Math.round(INSIDE.x * 10) / 10; st.iz = Math.round(INSIDE.z * 10) / 10; }
     const js = JSON.stringify(st); if (js === lastSent) return; lastSent = js; ROOM.presence(st).catch(() => {});
   }, 150);
 }
@@ -365,12 +390,12 @@ function refreshTitle() {
   $('#nick').textContent = nickOf(S.name); const sw = $('#swatches'); sw.textContent = '';
   DATA.shirts.forEach((c, i) => sw.append(el('button', { style: 'background:#' + c.toString(16).padStart(6, '0'), 'aria-label': 'Shirt colour ' + (i + 1), 'aria-pressed': String(i === S.color), on: { click: () => { S.color = i; rebuildMe(); refreshTitle(); } } })));
 }
-function rebuildMe() { if (me) scene.remove(me); me = makeIslander(S.color); me.position.set(P.x - OX, P.y, P.z - OZ); me.rotation.order = 'YXZ'; me.rotation.y = -P.h; poseIslander(me, P.mode, P.craft, false, 0, 0); }
+function rebuildMe() { if (me) me.removeFromParent(); me = makeIslander(S.color); me.position.set(P.x - OX, P.y, P.z - OZ); me.rotation.order = 'YXZ'; me.rotation.y = -P.h; poseIslander(me, P.mode, P.craft, false, 0, 0); }
 $('#reroll').addEventListener('click', () => { S.name = [Math.floor(Math.random() * 12), Math.floor(Math.random() * 12)]; refreshTitle(); });
 $('#go').addEventListener('click', () => {
   initAudio(); started = true; $('#title').hidden = true; $('#hud').hidden = false; cam.dist = 9; cam.pitch = .2; cam.lastDrag = -10; save();
   $('#sndw').style.display = S.muted ? 'none' : ''; setCraft(P.craft, true);
-  toast('Haisai, ' + nickOf(S.name) + '!', 'Pink crystals mark places to visit. In Naha, tap a building to read about it.'); learn('mensore');
+  toast('Haisai, ' + nickOf(S.name) + '!', 'Pink signs are places to eat: walk up to the door to go in. Tap any sign for its address and phone number.'); learn('mensore');
 });
 
 let lastFrame = performance.now(), frameCount = 0, fpsT = 0, fpsN = 0, pxr = renderer.getPixelRatio();
@@ -392,13 +417,13 @@ function frame(now) {
   U.uRing.value.x = P.x - OX; U.uRing.value.y = P.z - OZ;
   water.position.set(P.x - OX, 0, P.z - OZ); deepPlane.position.x = P.x - OX; deepPlane.position.z = P.z - OZ; sky.position.copy(camera.position);
   updatePlaces(tNow, P.x, P.z, S.stamps); updateFish(tNow, P.x, P.z); updateRemotes(dt, tNow); updateParticles(dt);
-  if (myBubble) { myBubbleT -= dt; myBubble.position.set(P.x - OX, P.y + 3.6, P.z - OZ); myBubble.scale.set(3.2, .92, 1); if (myBubbleT <= 0) { scene.remove(myBubble); myBubble = null; } }
+  if (myBubble) { myBubbleT -= dt; myBubble.position.set(me.position.x, me.position.y + 3.6, me.position.z); myBubble.scale.set(3.2, .92, 1); if (myBubbleT <= 0) { myBubble.removeFromParent(); myBubble = null; } }
   if (started && !chill) updateHud(dt);
-  renderer.render(scene, camera);
+  renderer.render(INSIDE ? inScene : scene, camera);
 }
 async function boot(data) {
   if (data && data.stamps) Object.assign(S, data);
-  refreshTitle(); applyStyle(); P.bike = S.bike !== false; $('#bBike').classList.toggle('sel', P.bike);
+  refreshTitle(); applyStyle(); setLand(LAND[S.land] || S.land === 'foot' ? S.land : S.bike === false ? 'foot' : 'bike', true);
   try { await loadWorld(); } catch (e) { $('#go').textContent = 'Could not load the islands. Reload to retry.'; return; }
   await loadNaha();
   initPlaces();
@@ -409,7 +434,7 @@ async function boot(data) {
   applyMood(false); requestAnimationFrame(frame);
   const go = $('#go'); go.disabled = false; go.textContent = 'Haisai! Dive in';
   initRoom(); setInterval(() => { if (started) save(); }, 6000);
-  window.__rw = { P, S, cam, renderer, NAHA, nahaReady, nahaPick, nahaBlocked, toggleBike, toggleFly, INST, startDive, setMood: (m) => { moodAuto = false; moodT = m; }, travelTo, setPos, openPlace, openMap, openPassport, PLACES, get frames() { return frameCount; } };
+  window.__rw = { P, S, cam, renderer, NAHA, nahaReady, nahaPick, nahaBlocked, toggleBike, toggleFly, setLand, enterShop, leaveShop, openShop, openBiz, shopsAtDoor, currentAction, get inside() { return INSIDE; }, INST, startDive, setMood: (m) => { moodAuto = false; moodT = m; }, travelTo, setPos, openPlace, openMap, openPassport, PLACES, get frames() { return frameCount; } };
 }
 const HOT = window.claude && window.claude.hot;
 if (HOT && HOT.snapshot) HOT.snapshot(() => JSON.parse(JSON.stringify(S)));

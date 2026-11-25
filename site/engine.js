@@ -481,6 +481,11 @@ function gridMesh(x0, z0, size, H, col, mat, town) {
   const mesh = new T.Mesh(g, mat); mesh.position.set(x0 - OX, 0, z0 - OZ); mesh.frustumCulled = false; mesh.matrixAutoUpdate = false; mesh.updateMatrix(); scene.add(mesh);
   return mesh;
 }
+function groundAt(x, z) {      // the ground as it is drawn nearby (a 16 m grid of triangles), so wheels and doorsteps sit on it instead of sinking in
+  const cx = Math.floor(x / CS), cz = Math.floor(z / CS), ch = nearChunks.get(cx + ',' + cz); if (!ch || !ch.H) return heightAt(x, z);
+  const st = CS / NS, m = NS + 3, fx = (x - cx * CS) / st, fz = (z - cz * CS) / st, i = Math.min(NS - 1, Math.floor(fx)), j = Math.min(NS - 1, Math.floor(fz)), u = fx - i, v = fz - j, q = (j + 1) * m + i + 1, H = ch.H;
+  return u + v <= 1 ? H[q] + (H[q + 1] - H[q]) * u + (H[q + m] - H[q]) * v : H[q + m + 1] + (H[q + m] - H[q + m + 1]) * (1 - u) + (H[q + 1] - H[q + m + 1]) * (1 - v);
+}
 function buildNear(cx, cz) {
   const x0 = cx * CS, z0 = cz * CS, st = CS / NS, m = NS + 3, w = NS + 1;
   const segs = collectSegs(x0 - SDR - 2 * st, z0 - SDR - 2 * st, x0 + CS + SDR + 2 * st, z0 + CS + SDR + 2 * st);
@@ -492,6 +497,7 @@ function buildNear(cx, cz) {
   }
   const ch = { mesh: null, inst: { palm: [], tree: [], house: [], tower: [], orb: [] }, tint: { palm: [], tree: [], house: [], tower: [], orb: [] }, orbs: [] };
   if (!any) return ch;
+  ch.H = H;
   const col = new Float32Array(w * w * 3), town = new Float32Array(w * w);
   for (let j = 0; j < w; j++) for (let i = 0; i < w; i++) {
     const q = (j + 1) * m + i + 1, h = H[q], sd = SD[q], x = x0 + i * st, z = z0 + j * st, o = (j * w + i) * 3; let c;

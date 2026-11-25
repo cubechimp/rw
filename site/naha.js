@@ -67,7 +67,7 @@ function buildNahaTile(t) {
     for (let i = 0; i < n; i++) { const j = (i + 1) % n; cx += xs[i]; cz += zs[i]; ar += xs[i] * zs[j] - xs[j] * zs[i]; if (xs[i] < a0) a0 = xs[i]; if (xs[i] > a1) a1 = xs[i]; if (zs[i] < c0) c0 = zs[i]; if (zs[i] > c1) c1 = zs[i]; }
     cx /= n; cz /= n; const gen = fl & 8, g = heightAt(x0 + cx, z0 + cz), y0 = g - 2.5, y1 = g + h, O = has2 ? Bq : A, sg = ar > 0 ? 1 : -1;
     const col = gen ? N_GEN[Math.floor(hash(t.tx * 31 + bi, t.tz, 33) * N_GEN.length)] : N_PAL[Math.floor(hash(t.tx * 977 + bi, t.tz, 31) * N_PAL.length)], roof = gen && h < 5.5 ? [.85, .36, .2] : [col[0] * .8, col[1] * .8, col[2] * .82];
-    gr.push(g); hs.push(h); est.push(fl & 12); cen.push(cx, cz); (has2 ? sB : sA).push(O.p.length / 3, bi); foot.push({ xs, zs, n, a0, a1, c0, c1, top: y1 }); bi++;
+    gr.push(g); hs.push(h); est.push(fl & 12); cen.push(cx, cz); (has2 ? sB : sA).push(O.p.length / 3, bi); foot.push({ xs, zs, n, a0, a1, c0, c1, top: y1, gen }); bi++;
     for (let i = 0; i < n; i++) {
       const j = (i + 1) % n, ax = xs[i], az = zs[i], bx = xs[j], bz = zs[j]; let nx = (bz - az) * sg, nz = -(bx - ax) * sg; const l = Math.hypot(nx, nz) || 1; nx /= l; nz /= l;
       O.p.push(ax, y0, az, bx, y0, bz, bx, y1, bz, ax, y0, az, bx, y1, bz, ax, y1, az);
@@ -114,7 +114,8 @@ function buildNahaTile(t) {
   t.ground = gr; t.heights = hs; t.est = est; t.foot = foot;
   const cg = new Array(48 * 48);      // collision grid, 16 m cells
   foot.forEach((f, fi) => { for (let c = clamp(Math.floor(f.c0 / 16), 0, 47); c <= clamp(Math.floor(f.c1 / 16), 0, 47); c++) for (let a = clamp(Math.floor(f.a0 / 16), 0, 47); a <= clamp(Math.floor(f.a1 / 16), 0, 47); a++) (cg[c * 48 + a] || (cg[c * 48 + a] = [])).push(fi); }); t.cg = cg;
-  t.pois = (t.data.p || []).map((q) => ({ x: q[0], z: q[1], name: String(q[2]).slice(0, 28), cat: String(q[3] || '').replace(/_/g, ' ').slice(0, 24), sp: null }));      // shops, restaurants and other named places
+  t.pois = (t.data.p || []).map((q) => ({ t, x: q[0], z: q[1], id: (Math.imul(q[0], 73856093) ^ Math.imul(q[1], 19349663) ^ String(q[2]).length) >>> 0, full: String(q[2]), name: String(q[2]).slice(0, 28), cat: String(q[3] || '').replace(/_/g, ' ').slice(0, 24), kind: foodKind(q[3]),
+    addr: String(q[4] || '').replace(/\s*〒\s*$/, ''), tel: String(q[5] || ''), sp: null }));      // shops, restaurants and other named places
   if (A.p.length) { t.meshA = nMesh(nGeo(A), t); t.meshA.userData = { t, s: sA }; } if (Bq.p.length) { t.meshB = nMesh(nGeo(Bq), t); t.meshB.userData = { t, s: sB }; }
   const nm = t.set === 'naha' && NAHA.names && NAHA.names[t.key]; t.labels = [];      // names recorded in the city model (schools, stations, post offices...)
   if (nm) for (const k in nm) { const i = +k; if (!(i < gr.length)) continue; const sp = textSprite([String(nm[k]).slice(0, 24)], { w: 512, h: 96, stroke: '#ffb23e' }); sp.userData.w = [x0 + cen[i * 2], gr[i] + hs[i] + 5, z0 + cen[i * 2 + 1]]; sp.visible = false; scene.add(sp); t.labels.push(sp); }
@@ -153,7 +154,7 @@ function buildNahaLod2(t) {
   t.m2 = null; t.m2s = 3; if (O.p.length) { t.mesh2 = nMesh(nGeo(O), t); t.mesh2.userData = { t, s: s2 }; }
 }
 function dropNahaTile(t) { for (const m of [t.meshA, t.meshB, t.mesh2]) if (m) { scene.remove(m); m.geometry.dispose(); } if (t.tex) t.tex.dispose(); if (t.mat) t.mat.dispose(); if (t.labels) for (const l of t.labels) { scene.remove(l); l.material.map.dispose(); l.material.dispose(); } if (t.pois) for (const q of t.pois) if (q.sp) { scene.remove(q.sp); q.sp.material.map.dispose(); q.sp.material.dispose(); q.sp = null; } }
-function syncNaha() { for (const t of NAHA.tiles.values()) { for (const m of [t.meshA, t.meshB, t.mesh2]) if (m) { m.position.set(t.tx * NAHA.size - OX, 0, t.tz * NAHA.size - OZ); m.updateMatrix(); } if (t.mat) t.mat.uniforms.uRoadRect.value.set(t.tx * NAHA.size - OX, t.tz * NAHA.size - OZ, NAHA.size); } }
+function syncNaha() { for (const t of NAHA.tiles.values()) { for (const m of [t.meshA, t.meshB, t.mesh2]) if (m) { m.position.set(t.tx * NAHA.size - OX, 0, t.tz * NAHA.size - OZ); m.updateMatrix(); } if (t.mat) t.mat.uniforms.uRoadRect.value.set(t.tx * NAHA.size - OX, t.tz * NAHA.size - OZ, NAHA.size); } NAHA.poiT = 0; }
 function dropPoi(q) { if (q.sp) { scene.remove(q.sp); q.sp.material.map.dispose(); q.sp.material.dispose(); q.sp = null; } }
 function updateNaha(px, pz, budget) {
   if (!NAHA.idx) return; const S = NAHA.size, R = U.uRing.value.z + 80, L2 = MOBILE ? 620 : 900; let built = 0;
@@ -178,13 +179,13 @@ function updateNaha(px, pz, budget) {
   // business labels: the nearest ones get a sign, re-chosen a few times a second
   const PR = MOBILE ? 200 : 320, PN_ = MOBILE ? 70 : 160;
   if (!(NAHA.poiT-- > 0)) {
-    NAHA.poiT = 18; const c = [];
-    for (const t of NAHA.tiles.values()) if (t.pois) for (const q of t.pois) { q.dd = Math.hypot(q.x - px, q.z - pz); if (q.dd < PR) c.push(q); else dropPoi(q); }
+    NAHA.poiT = 18; const c = [], food = [], KR = MOBILE ? 230 : 360;
+    for (const t of NAHA.tiles.values()) if (t.pois) for (const q of t.pois) { q.dd = Math.hypot(q.x - px, q.z - pz); if (q.dd < PR) c.push(q); else dropPoi(q); if (q.kind && q.dd < KR) food.push(q); }
     c.sort((a, b) => a.dd - b.dd);
-    c.forEach((q, i) => { if (i >= PN_) dropPoi(q); else if (!q.sp) { q.sp = textSprite(q.cat ? [q.name, q.cat] : [q.name], { w: 384, h: q.cat ? 96 : 72, stroke: /restaurant|cafe|food|bar|izakaya|bakery|ramen|soba|sushi|coffee/.test(q.cat) ? '#ff4fa3' : '#19c8ff' }); q.y = heightAt(q.x, q.z) + 4.2; scene.add(q.sp); } });
-    NAHA.poiShown = c.slice(0, PN_);
+    c.forEach((q, i) => { if (i >= PN_) dropPoi(q); else if (!q.sp) { q.sp = textSprite(q.cat ? [q.name, q.cat] : [q.name], { w: 384, h: q.cat ? 96 : 72, stroke: q.kind ? '#ff4fa3' : '#19c8ff' }); q.sp.userData.q = q; if (q.lx === undefined) q.y = heightAt(q.x, q.z) + 4.2; scene.add(q.sp); } });
+    NAHA.poiShown = c.slice(0, PN_); updateShops(food);
   }
-  if (NAHA.poiShown) for (const q of NAHA.poiShown) if (q.sp) { const dd = Math.hypot(q.x - px, q.z - pz), s = clamp(dd * .05, 1.2, 14); q.sp.scale.set(s * q.sp.userData.aspect * .5, s * .5, 1); q.sp.position.set(q.x - OX, q.y + s * .25, q.z - OZ); }
+  if (NAHA.poiShown) for (const q of NAHA.poiShown) if (q.sp) { const dd = Math.hypot(q.x - px, q.z - pz), s = clamp(dd * .05, 1.2, 14); q.sp.scale.set(s * q.sp.userData.aspect * .5, s * .5, 1); q.sp.position.set((q.lx === undefined ? q.x : q.lx) - OX, q.y + s * .25, (q.lz === undefined ? q.z : q.lz) - OZ); }
 }
 function nahaReady(px, pz) { if (!NAHA.idx) return true; for (const t of NAHA.tiles.values()) if (t.state === 1 || t.state === 2 || t.m2s === 1 || t.m2s === 2) return false; return true; }
 
@@ -193,8 +194,12 @@ const _ray = new T.Raycaster(), _nd = new T.Vector2();
 const N_STRUCT = { 601: 'wood', 602: 'steel-reinforced concrete', 603: 'reinforced concrete', 604: 'steel frame', 605: 'light steel frame', 606: 'brick, block or stone', 610: 'non-wood' };
 function nahaPick(cx, cy) {
   if (!NAHA.idx) return null; _nd.set(cx / innerWidth * 2 - 1, -(cy / innerHeight) * 2 + 1); _ray.setFromCamera(_nd, camera); _ray.far = 900;
+  const sps = []; if (NAHA.poiShown) for (const q of NAHA.poiShown) if (q.sp) sps.push(q.sp);      // a sign: the place card
+  const sh = _ray.intersectObjects(sps, false)[0]; if (sh && sh.object.userData.q) return { poi: sh.object.userData.q };
   const ms = []; for (const t of NAHA.tiles.values()) for (const m of [t.meshA, t.meshB, t.mesh2]) if (m && m.visible) ms.push(m);
-  const hit = _ray.intersectObjects(ms, false)[0]; if (!hit || !hit.object.userData.s) return null;
+  for (const k of SHOP_KINDS) if (INST['shop_' + k].mesh.count) ms.push(INST['shop_' + k].mesh);
+  const hit = _ray.intersectObjects(ms, false)[0]; if (hit && hit.object.isInstancedMesh) { const q = hit.object.userData.q && hit.object.userData.q[hit.instanceId]; return q ? { poi: q } : null; }
+  if (!hit || !hit.object.userData.s) return null;
   const ud = hit.object.userData, s = ud.s, v = hit.faceIndex * 3; let lo = 0, hi = s.length / 2 - 1;
   while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (s[mid * 2] <= v) lo = mid; else hi = mid - 1; }
   const bi = s[lo * 2 + 1], t = ud.t;
