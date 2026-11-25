@@ -69,7 +69,8 @@ addEventListener('keydown', (e) => {
   if (e.code === 'Escape' && modalOpen) closeModal();
   if (modalOpen) return;
   if (e.code === 'KeyE') doAction(); if (e.code === 'KeyM') openMap(); if (e.code === 'KeyP') openPassport(); if (e.code === 'Space') { e.preventDefault(); jump(); }
-  if (INSIDE) return;
+  if (INSIDE || P.tow) return;
+  if (e.code === 'KeyF') toggleFly();
   if (P.mode === 'land' && !P.fly) { if (e.code === 'KeyB' || e.code === 'Digit1') setLand('bike'); if (e.code === 'KeyK' || e.code === 'Digit2') setLand('kart'); if (e.code === 'KeyC' || e.code === 'Digit3') setLand('kei'); }
   else if (!P.fly) { if (e.code === 'Digit1') setCraft('jetski'); if (e.code === 'Digit2') setCraft('sabani'); if (e.code === 'Digit3') setCraft('sup'); }
 });
@@ -111,12 +112,11 @@ function setLand(v, quiet) {      // tap the ride you are on to get off and walk
 function toggleBike() { setLand('bike'); }
 let rideCtx = '';
 function syncRideButtons() {      // land rides and the plane on land, boats on the water
-  const ctx = INSIDE ? 'in' : P.fly ? 'air' : P.mode === 'sea' ? 'sea' : 'land'; if (ctx === rideCtx) return; rideCtx = ctx;
+  const ctx = INSIDE ? 'in' : P.tow ? 'tow' : P.fly ? 'air' : P.mode === 'sea' ? 'sea' : 'land'; if (ctx === rideCtx) return; rideCtx = ctx;
   for (const b of document.querySelectorAll('.crafts [data-ctx]')) b.hidden = !b.dataset.ctx.split(' ').includes(ctx);
 }
 function toggleFly() {
-  return;      // the seaplane is parked: this build is about being on the ground
-  if (!started || modalOpen || chill || P.diving || INSIDE) return;
+  if (!started || modalOpen || chill || P.diving || INSIDE || P.tow) return;
   if (!P.fly && P.mode !== 'land') { toast('Seaplane', 'It takes off from land. Head for the shore first.'); return; }
   if (!P.fly) { P.fly = true; P.landing = false; P.vy = 12; P.y += 2; P.speed = Math.max(P.speed, 32); P.air = false; P.jy = 0; toast('Seaplane', 'Stick up to climb, down to descend. Touch down gently to land, on sea or land.'); }
   else { P.landing = !P.landing; toast(P.landing ? 'Coming in to land' : 'Climbing again', ''); }
@@ -146,10 +146,19 @@ function sayEmote(i) {
 function canHop() { return started && !chill && !INSIDE && !P.fly && !P.diving && P.mode === 'land' && (P.land === 'bike' || P.land === 'kart'); }      // bunny hops are for the bicycle and the go-kart
 function jump() { if (!canHop() || modalOpen || P.air) return; P.air = true; P.vy = 8.5; P.spin = 0; }      // 8.5 m/s up: about 1.8 m, twice the old hop
 
+function collectFloats() {      // ride through a glowing glass float to pick it up
+  const now = performance.now();
+  for (const ch of nearChunks.values()) for (const o of ch.orbs) {
+    if (Math.abs(o.x - P.x) > 3.4 || Math.abs(o.z - P.z) > 3.4) continue; const t = collected.get(o.id); if (t && now - t < 240000) continue;
+    collected.set(o.id, now); instDirty = true; const gain = P.luckT > 0 ? 2 : 1; S.glass += gain; ding(1180 + o.c * 140, 1770 + o.c * 210); splash(o.x - OX, o.z - OZ, 8, 3);
+    if (S.glass === 5 || S.glass % 10 === 0) toast(S.glass + ' Ryukyu glass', 'Trade them for food at any island stall.');
+  }
+}
 /* ---------------- player ---------------- */
 function nearestPlace(onlyNew) { let best = null; for (const p of PLACES) { if (onlyNew && S.stamps[p.id]) continue; if (!best || p.dist < best.dist) best = p; } return best; }
 function currentAction() {
   if (INSIDE) return insideAction();
+  if (P.tow) return { label: 'Let go', fn: () => endTow('done') };
   if (P.fly) return { label: P.landing ? 'Climb again' : 'Land the plane', fn: toggleFly };
   if (P.mode === 'land' && P.speed < 16) {      // at a restaurant door
     const d = shopsAtDoor();
@@ -159,6 +168,7 @@ function currentAction() {
   if (P.diving) return { label: 'Surface', fn: () => { P.diving = false; turtle.visible = false; splash(P.x - OX, P.z - OZ, 14, 3); splashSfx(.2); } };
   const p = nearestPlace(false); if (p && p.dist < 70) return { label: 'Visit ' + p.en, fn: () => openPlace(p) };
   if (P.mode === 'sea' && P.gh < -1.3 && P.speed < 6) return { label: 'Snorkel here', fn: startDive };
+  if (P.shore && P.speed < 14) return { label: 'Water sports', fn: openSports };
   return null;
 }
 function doAction() { if (!started || modalOpen) return; const a = currentAction(); if (a) a.fn(); }
@@ -172,10 +182,11 @@ function updatePlayer(dt) {
   if (keys.KeyA || keys.ArrowLeft) ix -= 1; if (keys.KeyD || keys.ArrowRight) ix += 1; if (keys.KeyW || keys.ArrowUp) iy += 1; if (keys.KeyS || keys.ArrowDown) iy -= 1;
   if (modalOpen || chill) ix = iy = 0;
   if (INSIDE) { insideStep(dt, ix, iy); return; }
+  if (P.tow) { towStep(dt, ix, iy); return; }
   if (P.fly) { flyStep(dt, ix, iy); return; }
   const mag = Math.min(1, Math.hypot(ix, iy)), sea = P.mode === 'sea', ci = CRAFT_INFO[P.craft];
   const ride = !sea && !chill ? LAND[P.land] : null, biking = !!ride;
-  let maxS = P.diving ? 3.2 : sea ? ci.max : ride ? ride.max : 3.4, turn = P.diving ? 5 : sea ? ci.turn : ride ? ride.turn : 10, acc = P.diving ? 6 : sea ? ci.acc : ride ? ride.acc : 14;
+  let maxS = P.diving ? 3.2 : sea ? ci.max : ride ? ride.max : 7.5, turn = P.diving ? 5 : sea ? ci.turn : ride ? ride.turn : 10, acc = P.diving ? 6 : sea ? ci.acc : ride ? ride.acc : 30;
   const boosting = (inp.boost || keys.ShiftLeft || keys.ShiftRight) && mag > .1 && !P.diving;      // no cooldown
   if (boosting) maxS *= sea ? 1.6 : 1.7;
   if (P.buffT > 0) { P.buffT -= dt; maxS *= 1.15; } if (P.luckT > 0) P.luckT -= dt;
@@ -224,13 +235,7 @@ function updatePlayer(dt) {
   }
   poseIslander(me, chill ? 'sit' : P.mode, P.craft, P.diving, tNow, P.speed, { dt, ride: onRide, air: P.air });
   if (engineGain) { const car = onRide === 'kart' || onRide === 'kei', on = ((P.mode === 'sea' && P.craft === 'jetski' && !P.diving) || (car && P.speed > .5)) && !S.muted; engineGain.gain.value = lerp(engineGain.gain.value, on ? .012 + Math.min(.05, P.speed * .0018) : 0, .1); engineOsc.frequency.value = (P.mode === 'land' && P.land === 'kei' ? 38 : 46) + P.speed * (P.mode === 'land' && P.land === 'kei' ? 2 : 3.2); }
-  // glass floats
-  const now = performance.now();
-  for (const ch of nearChunks.values()) for (const o of ch.orbs) {
-    if (Math.abs(o.x - P.x) > 3.4 || Math.abs(o.z - P.z) > 3.4) continue; const t = collected.get(o.id); if (t && now - t < 240000) continue;
-    collected.set(o.id, now); instDirty = true; const gain = P.luckT > 0 ? 2 : 1; S.glass += gain; ding(1180 + o.c * 140, 1770 + o.c * 210); splash(o.x - OX, o.z - OZ, 8, 3);
-    if (S.glass === 5 || S.glass % 10 === 0) toast(S.glass + ' Ryukyu glass', 'Trade them for food at any island stall.');
-  }
+  collectFloats();
   // sea life
   if (P.diving) {
     diveLog -= dt;
@@ -261,7 +266,7 @@ function rebase(x, z) {
   planChunks(x, z); pumpChunks(1e9); rebuildInstances(); syncNaha();
   for (let i = 0; i < PN; i++) pLife[i] = 0;
 }
-function setPos(x, z) { if (INSIDE) { INSIDE = null; scene.add(me); } P.fly = false; P.landing = false; $('#bFly').classList.remove('sel'); P.x = x; P.z = z; P.speed = 0; P.diving = false; P.air = false; P.jy = 0; turtle.visible = false; const h = heightAt(x, z); P.gh = h; P.mode = h > .3 ? 'land' : 'sea'; P.y = Math.max(h, 0); rebase(x, z); }
+function setPos(x, z) { if (INSIDE) { INSIDE = null; scene.add(me); } P.tow = null; towBoat.visible = towRope.visible = false; P.fly = false; P.landing = false; $('#bFly').classList.remove('sel'); P.x = x; P.z = z; P.speed = 0; P.diving = false; P.air = false; P.jy = 0; turtle.visible = false; const h = heightAt(x, z); P.gh = h; P.mode = h > .3 ? 'land' : 'sea'; P.y = Math.max(h, 0); rebase(x, z); }
 function travelTo(x, z, label) {
   closeModal(); const f = $('#fade'); f.textContent = label; f.classList.add('on');
   setTimeout(() => { setPos(x, z); cam.yaw = P.h; save(); setTimeout(() => f.classList.remove('on'), 150); }, 520);
@@ -278,6 +283,7 @@ function openPlace(p) {
   if (first) { S.stamps[p.id] = Date.now(); ding(660, 990); pluck(0, .4); pluck(3, .4, AC ? AC.currentTime + .12 : 0); pluck(5, .4, AC ? AC.currentTime + .24 : 0); }
   S.words[p.word] = 1; save();
   const acts = el('div', { class: 'acts' });
+  if (p.cat === 'beach' || atShore()) acts.append(el('button', { class: 'act', on: { click: openSports } }, el('span', { class: 'ic' }, '🚤'), el('span', null, el('b', null, 'Water sports マリンスポーツ'), el('small', null, 'Water ski, wakeboard, banana boat or parasail, from this beach.'))));
   if (p.food) {
     const f = DATA.foods[p.food], price = 2;
     const btn = el('button', { class: 'act', on: { click: () => {
@@ -311,9 +317,9 @@ function openPassport(tab) {
   if (tab === 3) { const l = el('div', { class: 'list' }); DATA.fish.forEach((f, i) => { const on = S.fish[i]; l.append(el('div', { class: 'item' + (on ? '' : ' off') }, el('span', { class: 'ic' }, on ? (i === 5 ? '🐢' : i === 7 ? '🐍' : '🐠') : '🌊'), el('span', null, el('b', null, on ? f[0] + ' ' + f[1] : 'Not met yet'), on ? el('div', null, f[2]) : el('div', null, 'Stop over a reef and snorkel.')))); }); body.append(l); }
   openModal(el('div', null, el('h2', { id: 'mTitle' }, nickOf(S.name) + '’s passport', el('small', null, '島のパスポート')), tabs, body));
 }
-function openMap(region, sel) {
+function openMap(region, sel, cat) {
   region = typeof region === 'number' ? region : regionAt(P.x, P.z); const R = DATA.regions[region], b = R.b, bw = b[2] - b[0], bh = b[3] - b[1];
-  const tabs = el('div', { class: 'tabs', role: 'tablist' }); DATA.regions.forEach((r, i) => tabs.append(el('button', { role: 'tab', 'aria-selected': String(i === region), on: { click: () => openMap(i) } }, r.name)));
+  const tabs = el('div', { class: 'tabs', role: 'tablist' }); DATA.regions.forEach((r, i) => tabs.append(el('button', { role: 'tab', 'aria-selected': String(i === region), on: { click: () => openMap(i, null, cat) } }, r.name)));
   const W = 1040, H = Math.round(W * bh / bw), cv = el('canvas', { id: 'map', width: W, height: H }), c = cv.getContext('2d'), sc = W / bw;
   const g = c.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#2aa6ff'); g.addColorStop(1, '#0a63cf'); c.fillStyle = g; c.fillRect(0, 0, W, H);
   for (const pass of [0, 1]) {
@@ -327,13 +333,22 @@ function openMap(region, sel) {
   const show = (p) => { detail.textContent = ''; for (const d of wrap.querySelectorAll('.dot')) d.classList.toggle('sel', d.dataset.id === p.id);
     detail.append(el('div', { class: 'item' }, el('span', null, el('b', null, p.en + ' ' + p.jp), el('div', null, (S.stamps[p.id] ? 'Stamped. ' : 'Not visited yet. ') + fmtDist(Math.hypot(p.x - P.x, p.z - P.z)) + ' from you at true scale.'))),
       el('button', { class: 'act', on: { click: () => travelTo(p.x, p.z, 'Sailing to ' + p.en + '…') } }, el('span', { class: 'ic' }, '⛴'), el('span', null, el('b', null, 'Take the ferry here'), el('small', null, 'Or ride there yourself. It is a real distance.')))); };
-  let n = 0; const list = el('div', { class: 'tabs' });
-  for (const p of PLACES) { if (p.region !== region) continue; n++; const num = String(n);
-    wrap.append(el('button', { class: 'dot' + (S.stamps[p.id] ? ' seen' : ''), style: pos(p.x, p.z), 'data-id': p.id, 'aria-label': p.en, on: { click: () => show(p) } }, num));
-    list.append(el('button', { on: { click: () => show(p) } }, num + ' ' + p.en)); }
+  // places sorted by kind: beaches, castles and heritage, capes and bays, towns, islands
+  let n = 0; const list = el('div', { class: 'kinds' }), kinds = el('div', { class: 'tabs', role: 'tablist', 'aria-label': 'Kind of place' });
+  kinds.append(el('button', { role: 'tab', 'aria-selected': String(!cat), on: { click: () => openMap(region) } }, 'All'));
+  for (const [id, icon, name] of DATA.cats) {
+    const here = PLACES.filter((p) => p.region === region && p.cat === id);
+    kinds.append(el('button', { role: 'tab', 'aria-selected': String(cat === id), disabled: !here.length, on: { click: () => openMap(region, null, id) } }, icon + ' ' + name + ' ' + here.length));
+    if ((cat && cat !== id) || !here.length) continue;
+    const row = el('div', { class: 'tabs' });
+    for (const p of here) { n++; const num = String(n);
+      wrap.append(el('button', { class: 'dot' + (S.stamps[p.id] ? ' seen' : ''), style: pos(p.x, p.z), 'data-id': p.id, 'aria-label': p.en, title: p.en, on: { click: () => show(p) } }, num));
+      row.append(el('button', { on: { click: () => show(p) } }, num + ' ' + p.en)); }
+    list.append(el('h3', null, icon + ' ' + name), row);
+  }
   if (inB(P.x, P.z)) wrap.append(el('div', { class: 'dot peer', style: pos(P.x, P.z) + ';background:#fff', title: 'You' }));
   for (const r of remotes.values()) if (inB(r.x, r.z)) wrap.append(el('button', { class: 'dot peer', style: pos(r.x, r.z), 'aria-label': r.name, title: r.name, on: { click: () => { detail.textContent = ''; detail.append(el('button', { class: 'act', on: { click: () => travelTo(r.x + 6, r.z + 6, 'Going to say haisai…') } }, el('span', { class: 'ic' }, '👋'), el('span', null, el('b', null, 'Join ' + r.name), el('small', null, 'Ichariba chōdē: once we meet, we are family.')))); } } }));
-  openModal(el('div', null, el('h2', { id: 'mTitle' }, R.name, el('small', null, R.jp + ' · ' + Math.round(bw / 1000) + ' km across')), tabs, wrap, list, detail));
+  openModal(el('div', null, el('h2', { id: 'mTitle' }, R.name, el('small', null, R.jp + ' · ' + Math.round(bw / 1000) + ' km across')), tabs, kinds, wrap, list, detail));
   if (sel) show(sel);
 }
 
@@ -342,10 +357,10 @@ let hudT = 0, curMuni = '';
 const mini = $('#mini'), mc = mini.getContext('2d');
 function updateHud(dt) {
   hudT -= dt; const a = currentAction(), ab = $('#act'); ab.hidden = !a; if (a && ab.textContent !== a.label) ab.textContent = a.label; syncRideButtons(); const hb = $('#bJump'), ch = canHop(); if (hb.hidden === ch) hb.hidden = !ch;
-  if (hudT > 0) return; hudT = .25;
+  if (hudT > 0) return; hudT = .25; P.shore = !INSIDE && !P.fly && !P.tow && atShore();
   let code = ''; for (const r of muniRings) { if (P.x < r.bb[0] || P.x > r.bb[2] || P.z < r.bb[1] || P.z > r.bb[3]) continue; if (inRing(r, P.x, P.z)) { code = r.code; break; } }
   const ll = xz2ll(P.x, P.z), loc = $('#loc'), m = DATA.muni[code];
-  loc.firstChild.textContent = INSIDE ? INSIDE.q.name : m ? m[1] + ' ' + m[0] : 'On the water 海上'; loc.lastChild.textContent = INSIDE ? (INSIDE.q.addr || SHOP[INSIDE.q.kind].label).slice(0, 44) : P.fly ? 'Altitude ' + Math.round(P.y) + ' m · ' + Math.round(P.speed * 3.6) + ' km/h' : ll[1].toFixed(4) + '°N  ' + ll[0].toFixed(4) + '°E';
+  loc.firstChild.textContent = INSIDE ? INSIDE.q.name : P.tow ? P.tow.K.label + ' ' + P.tow.K.jp : m ? m[1] + ' ' + m[0] : 'On the water 海上'; loc.lastChild.textContent = INSIDE ? (INSIDE.q.addr || SHOP[INSIDE.q.kind].label).slice(0, 44) : P.tow ? towHud() : P.fly ? 'Altitude ' + Math.round(P.y) + ' m · ' + Math.round(P.speed * 3.6) + ' km/h' : ll[1].toFixed(4) + '°N  ' + ll[0].toFixed(4) + '°E';
   if (code !== curMuni) { curMuni = code; }
   const tp = nearestPlace(true) || nearestPlace(false), tg = $('#target');
   if (tp) { const br = Math.atan2(tp.x - P.x, -(tp.z - P.z)) - cam.yaw; tg.firstChild.style.transform = `rotate(${br}rad)`; tg.lastChild.textContent = tp.en + ' · ' + fmtDist(tp.dist); }
@@ -366,7 +381,7 @@ let lastSent = '';
 function readPeer(pr) {
   const s = pr.presence || {}, num = (v) => typeof v === 'number' && isFinite(v); if (!num(s.x) || !num(s.z)) return null;
   const n = Array.isArray(s.n) ? [s.n[0] | 0, s.n[1] | 0] : [0, 0], c = num(s.c) ? clamp(Math.round(s.c), 0, 7) : 0;
-  return { x: clamp(s.x, -6e5, 6e5), z: clamp(s.z, -6e5, 6e5), y: num(s.y) ? clamp(s.y, -10, 600) : 0, h: num(s.h) ? s.h : 0, m: num(s.m) ? clamp(Math.round(s.m), 0, 8) : 0, i: num(s.i) ? s.i >>> 0 : 0, ix: num(s.ix) ? clamp(s.ix, -5, 5) : 0, iz: num(s.iz) ? clamp(s.iz, -5, 5) : 0, d: s.d ? 1 : 0, n, c, e: num(s.e) ? clamp(Math.round(s.e), 0, 2) : 0, et: num(s.et) ? s.et : 0, nk: n.join('_') + '_' + c };
+  return { x: clamp(s.x, -6e5, 6e5), z: clamp(s.z, -6e5, 6e5), y: num(s.y) ? clamp(s.y, -10, 600) : 0, h: num(s.h) ? s.h : 0, m: num(s.m) ? clamp(Math.round(s.m), 0, 12) : 0, i: num(s.i) ? s.i >>> 0 : 0, ix: num(s.ix) ? clamp(s.ix, -5, 5) : 0, iz: num(s.iz) ? clamp(s.iz, -5, 5) : 0, d: s.d ? 1 : 0, n, c, e: num(s.e) ? clamp(Math.round(s.e), 0, 2) : 0, et: num(s.et) ? s.et : 0, nk: n.join('_') + '_' + c };
 }
 async function initRoom() {
   let room = null; try { room = window.claude && window.claude.use ? await window.claude.use('room') : null; } catch (e) { room = null; }
@@ -381,7 +396,7 @@ async function initRoom() {
   } catch (e) { ROOM = null; return; }
   setInterval(() => {
     if (!ROOM || !started) return;
-    const st = { x: Math.round(P.x * 10) / 10, z: Math.round(P.z * 10) / 10, y: Math.round(P.y * 10) / 10, h: Math.round(P.h * 100) / 100, m: INSIDE ? 8 : P.fly ? 5 : P.mode === 'land' ? (LAND[P.land] ? LAND[P.land].m : 0) : CRAFTS.indexOf(P.craft) + 1, d: P.diving ? 1 : 0, n: S.name, c: S.color, e: P.emote, et: P.emoteT }; if (INSIDE) { st.i = INSIDE.id; st.ix = Math.round(INSIDE.x * 10) / 10; st.iz = Math.round(INSIDE.z * 10) / 10; }
+    const st = { x: Math.round(P.x * 10) / 10, z: Math.round(P.z * 10) / 10, y: Math.round(P.y * 10) / 10, h: Math.round(P.h * 100) / 100, m: INSIDE ? 8 : P.tow ? P.tow.K.m : P.fly ? 5 : P.mode === 'land' ? (LAND[P.land] ? LAND[P.land].m : 0) : CRAFTS.indexOf(P.craft) + 1, d: P.diving ? 1 : 0, n: S.name, c: S.color, e: P.emote, et: P.emoteT }; if (INSIDE) { st.i = INSIDE.id; st.ix = Math.round(INSIDE.x * 10) / 10; st.iz = Math.round(INSIDE.z * 10) / 10; }
     const js = JSON.stringify(st); if (js === lastSent) return; lastSent = js; ROOM.presence(st).catch(() => {});
   }, 150);
 }
@@ -435,7 +450,7 @@ async function boot(data) {
   applyMood(false); requestAnimationFrame(frame);
   const go = $('#go'); go.disabled = false; go.textContent = 'Haisai! Dive in';
   initRoom(); setInterval(() => { if (started) save(); }, 6000);
-  window.__rw = { P, S, cam, renderer, NAHA, nahaReady, nahaPick, nahaBlocked, toggleBike, toggleFly, setLand, enterShop, leaveShop, openShop, openBiz, shopsAtDoor, currentAction, get inside() { return INSIDE; }, INST, startDive, setMood: (m) => { moodAuto = false; moodT = m; }, travelTo, setPos, openPlace, openMap, openPassport, PLACES, get frames() { return frameCount; } };
+  window.__rw = { P, S, cam, renderer, NAHA, nahaReady, nahaPick, nahaBlocked, toggleBike, toggleFly, setLand, startTow, endTow, openSports, atShore, seaNear, enterShop, leaveShop, openShop, openBiz, shopsAtDoor, currentAction, get inside() { return INSIDE; }, INST, startDive, setMood: (m) => { moodAuto = false; moodT = m; }, travelTo, setPos, openPlace, openMap, openPassport, PLACES, get frames() { return frameCount; } };
 }
 const HOT = window.claude && window.claude.hot;
 if (HOT && HOT.snapshot) HOT.snapshot(() => JSON.parse(JSON.stringify(S)));

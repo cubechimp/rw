@@ -152,7 +152,7 @@ const renderer = new T.WebGLRenderer({ canvas, antialias: !MOBILE, powerPreferen
 renderer.outputColorSpace = T.LinearSRGBColorSpace;
 renderer.setPixelRatio(Math.min(devicePixelRatio || 1, MOBILE ? 1.5 : 2));
 const scene = new T.Scene();
-const camera = new T.PerspectiveCamera(62, 1, 0.6, 46000);
+const camera = new T.PerspectiveCamera(62, 1, 1.0, 46000);      // a 1 m near plane keeps depth sharp enough that close walls don't flicker
 function resize() { renderer.setSize(innerWidth, innerHeight, false); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
 addEventListener('resize', resize); resize();
 

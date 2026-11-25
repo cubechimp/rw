@@ -2,15 +2,15 @@
 'use strict';
 const CRAFTS = ['jetski', 'sabani', 'sup'];
 const CRAFT_INFO = {
-  jetski: { label: 'Jet ski', max: 15, turn: 2.2, acc: 8, seat: .62 },      // metres per second: about 54, 20 and 9 km/h
-  sabani: { label: 'Sabani', max: 5.5, turn: 1.2, acc: 2.5, seat: .36 },
-  sup: { label: 'SUP', max: 2.4, turn: 2.0, acc: 3, seat: .16 },
+  jetski: { label: 'Jet ski', max: 26, turn: 2.4, acc: 14, seat: .62 },
+  sabani: { label: 'Sabani', max: 11, turn: 1.3, acc: 4, seat: .36 },
+  sup: { label: 'SUP', max: 4.6, turn: 2.2, acc: 5, seat: .16 },
 };
 
 const LAND = {      // what you can ride on land
-  bike: { label: 'Bicycle', tip: 'An easy 27 km/h. It can bunny-hop.', max: 7.5, turn: 3.0, acc: 6, m: 4 },      // about 27, 47 and 60 km/h
-  kart: { label: 'Go-kart', tip: 'Low, quick and twitchy.', max: 13, turn: 3.0, acc: 12, m: 6 },
-  kei: { label: 'Kei car', tip: 'Yellow plate, right-hand drive, board on the roof.', max: 16.5, turn: 2.0, acc: 7, m: 7 },
+  bike: { label: 'Bicycle', tip: 'As fast on land as the jet ski on water. It can bunny-hop.', max: 26, turn: 3.4, acc: 16, m: 4 },
+  kart: { label: 'Go-kart', tip: 'Low, quick and twitchy. It can bunny-hop.', max: 31, turn: 3.3, acc: 30, m: 6 },
+  kei: { label: 'Kei car', tip: 'Yellow plate, right-hand drive, board on the roof.', max: 36, turn: 2.3, acc: 13, m: 7 },
 };
 function islanderParts(shirt) {      // head, body, hands and feet float apart, all glossy like Ryukyu glass
   const dark = 0x1b2a4a, s = (r, hexc, o) => part(gSph(r, 14, 10), hexc, o);
@@ -95,18 +95,27 @@ function makeIslander(colorIdx) {
   for (const [n, geo] of [['torso', G.torso], ['head', G.head], ['handL', G.hand], ['handR', G.hand], ['footL', G.foot], ['footR', G.foot]]) { const m = new T.Mesh(geo, glassMat); m.frustumCulled = false; g.add(m); parts[n] = m; }
   const rides = { jetski: new T.Mesh(jetskiGeo(shirt), objMat), sabani: new T.Mesh(sabaniGeo(), objMat), sup: new T.Mesh(supGeo(shirt), objMat), bike: new T.Mesh(bikeGeo(shirt), objMat), kart: new T.Mesh(kartGeo(shirt), objMat), kei: new T.Mesh(keiGeo(shirt), objMat), plane: new T.Mesh(planeGeo(shirt), objMat) };
   const prop = new T.Mesh(merge([part(gBox(1.9, .16, .05), 0x24304a), part(gBox(.16, 1.9, .05), 0x24304a)]), objMat); prop.position.set(0, .95, -2.28); prop.frustumCulled = false; rides.plane.add(prop); rides.plane.userData.prop = prop;
+  for (const k of TOW_KINDS) rides[k] = new T.Mesh(towGearGeo(k, shirt), objMat);
   const glass = new T.Mesh(keiGlassGeo(), paneMat); glass.frustumCulled = false; glass.renderOrder = 6; rides.kei.add(glass);
   for (const k in rides) { rides[k].visible = false; rides[k].frustumCulled = false; g.add(rides[k]); }
   g.userData = { parts, rides, a: { ph: 0 } }; scene.add(g); return g;
 }
 function poseIslander(g, mode, craft, diving, t, speed, opt) {
-  const u = g.userData, p = u.parts, a = u.a, dt = (opt && opt.dt) || .016, ride = mode === 'land' && opt && LAND[opt.ride] ? opt.ride : null, biking = ride === 'bike', air = !!(opt && opt.air);
-  for (const k of CRAFTS) u.rides[k].visible = mode === 'sea' && k === craft && !diving; for (const k in LAND) u.rides[k].visible = ride === k; u.rides.plane.visible = mode === 'air'; if (mode === 'air') u.rides.plane.userData.prop.rotation.z = t * 38;
+  const u = g.userData, p = u.parts, a = u.a, dt = (opt && opt.dt) || .016, ride = mode === 'land' && opt && LAND[opt.ride] ? opt.ride : null, biking = ride === 'bike', air = !!(opt && opt.air), tow = mode === 'sea' && opt && TOW[opt.tow] ? opt.tow : null;
+  for (const k of TOW_KINDS) u.rides[k].visible = tow === k;
+  for (const k of CRAFTS) u.rides[k].visible = mode === 'sea' && k === craft && !diving && !tow; for (const k in LAND) u.rides[k].visible = ride === k; u.rides.plane.visible = mode === 'air'; if (mode === 'air') u.rides.plane.userData.prop.rotation.z = t * 38;
   const br = Math.sin(t * 2.2) * .025; let by = .72, bz = 0, hy = 1.44, hz = 0, sy = 1, tilt = 0, ox = 0;
   let hl = [-.52, .78, 0], hr = [.52, .78, 0], fl = [-.2, .12, 0], fr = [.2, .12, 0];
   if (mode === 'air') { by = 1.5 + br; bz = .35; hy = by + .7; hz = bz - .04; hl = [-.3, 1.55, -.2]; hr = [.3, 1.55, -.2]; fl = [-.2, 1.1, .1]; fr = [.2, 1.1, .1]; }
   else if (diving) {      // swimming flat, kicking
     const k = Math.sin(t * 7); by = -.35; hy = -.3; hz = -.62; hl = [-.5 - Math.abs(k) * .1, -.35, -.25 + k * .3]; hr = [.5 + Math.abs(k) * .1, -.35, -.25 - k * .3]; fl = [-.16, -.35 + k * .14, .7]; fr = [.16, -.35 - k * .14, .7];
+  } else if (tow) {      // behind the boat: standing on skis or a board, astride the banana, or sitting in the parasail harness
+    const jig = Math.sin(t * 15) * .03 * Math.min(1, speed / 8), crouch = air ? .12 : 0;
+    if (tow === 'ski') { by = .98 + jig - crouch; bz = .14; hl = [-.13, 1.05, -.58]; hr = [.13, 1.05, -.58]; fl = [-.18, .2 + crouch, 0]; fr = [.18, .2 + crouch, 0]; }
+    else if (tow === 'wake') { by = .96 + jig - crouch; bz = .1; hl = [-.13, 1.05, -.58]; hr = [.13, 1.05, -.58]; fl = [-.04, .2 + crouch, -.32]; fr = [.04, .2 + crouch, .34]; }
+    else if (tow === 'banana') { by = 1.22 + jig * 2; hl = [-.16, .98, -.42]; hr = [.16, .98, -.42]; fl = [-.5, .5, .05]; fr = [.5, .5, .05]; }
+    else { by = 1.0 + br; hl = [-.42, 1.72, 0]; hr = [.42, 1.72, 0]; fl = [-.16, .44, -.3 + Math.sin(t * 1.7) * .08]; fr = [.16, .44, -.3 - Math.sin(t * 1.7) * .08]; }
+    hy = by + .7 + jig * 1.5; hz = bz - .04;
   } else if (mode === 'sea' || ride) {
     const seat = biking ? [1.2, .28] : ride === 'kart' ? [.74, .32] : ride === 'kei' ? [1.25, -.02] : craft === 'jetski' ? [.98, .45] : craft === 'sabani' ? [.8, 1.2] : [.86, .1];
     const jig = Math.sin(t * 13) * .03 * Math.min(1, speed / 8); by = seat[0] + jig + br; bz = seat[1]; hy = by + .7 + jig * 1.6; hz = bz - .04;
@@ -272,7 +281,7 @@ function upsertRemote(id, s) {
     r = { g: makeIslander(s.c), label: textSprite([nickOf(s.n)], { w: 384, h: 96, stroke: '#8fe01f' }), color: s.c, nk: s.nk, x: s.x, z: s.z, y: s.y, h: s.h, bubble: null, et: 0 };
     scene.add(r.label); remotes.set(id, r);
   }
-  r.tx = s.x; r.tz = s.z; r.ty = s.y; r.th = s.h; r.mode = s.m === 5 ? 'air' : s.m === 0 || s.m === 4 || s.m >= 6 ? 'land' : 'sea'; r.ride = s.m === 4 ? 'bike' : s.m === 6 ? 'kart' : s.m === 7 ? 'kei' : null; r.in = s.m === 8 ? s.i : 0; r.tix = s.ix; r.tiz = s.iz; r.craft = CRAFTS[clamp(s.m - 1, 0, 2)] || 'jetski'; r.diving = !!s.d; r.name = nickOf(s.n);
+  r.tx = s.x; r.tz = s.z; r.ty = s.y; r.th = s.h; r.mode = s.m === 5 ? 'air' : s.m === 0 || s.m === 4 || (s.m >= 6 && s.m <= 8) ? 'land' : 'sea'; r.ride = s.m === 4 ? 'bike' : s.m === 6 ? 'kart' : s.m === 7 ? 'kei' : null; r.in = s.m === 8 ? s.i : 0; r.tow = s.m >= 9 ? TOW_KINDS[s.m - 9] : null; r.tix = s.ix; r.tiz = s.iz; r.craft = CRAFTS[clamp(s.m - 1, 0, 2)] || 'jetski'; r.diving = !!s.d; r.name = nickOf(s.n);
   if (s.et && s.et !== r.et) { r.et = s.et; if (r.bubble) scene.remove(r.bubble); r.bubble = textSprite([EMOTES[s.e] || EMOTES[0]], { w: 384, h: 110, stroke: '#ff4fa3' }); r.bubbleT = 4; (r.g.parent || scene).add(r.bubble); }
   return r;
 }
@@ -288,7 +297,7 @@ function updateRemotes(dt, t) {
     let sp = far ? 0 : Math.hypot(r.tx - r.x, r.tz - r.z) * 8;
     if (here) { sp = Math.hypot(r.tix - r.ix, r.tiz - r.iz) * 8; r.ix = lerp(r.ix, r.tix, k); r.iz = lerp(r.iz, r.tiz, k); r.g.position.set(r.ix, 0, r.iz); } else r.g.position.set(r.x - OX, r.y, r.z - OZ);
     r.g.rotation.y = -r.h; const gp = r.g.position;
-    poseIslander(r.g, here ? 'land' : r.mode, r.craft, r.diving, t, sp, { dt, ride: here ? null : r.ride });
+    poseIslander(r.g, here ? 'land' : r.mode, r.craft, r.diving, t, sp, { dt, ride: here ? null : r.ride, tow: here ? null : r.tow });
     r.label.position.set(gp.x, gp.y + 3.1, gp.z); r.label.scale.set(2.6, .65, 1);
     if (r.bubble) { r.bubbleT -= dt; r.bubble.position.set(gp.x, gp.y + 4.1, gp.z); r.bubble.scale.set(3.2, .92, 1); if (r.bubbleT <= 0) { r.bubble.removeFromParent(); r.bubble = null; } }
   }

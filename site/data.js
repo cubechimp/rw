@@ -100,6 +100,11 @@ window.RW_DATA = (() => {
     P('hateruma', 'Hateruma Island', '波照間島', 3, 'The southernmost inhabited island of Japan. On clear nights the Southern Cross hangs just above the sea.', 'kokuto', 'tida'),
     P('yonaguni', 'Cape Irizaki, Yonaguni', '与那国・西崎', 3, 'The westernmost point of Japan. On the clearest days you can see the mountains of Taiwan, about 110 km away.', 'kajiki', 'fugarasa'),
   ];
+  // what kind of place each one is, for the map
+  const cats = [['beach', '🏖', 'Beaches'], ['heritage', '🏯', 'Castles & heritage'], ['nature', '🌊', 'Capes & bays'], ['town', '🏘', 'Towns & harbours'], ['island', '🏝', 'Islands']];
+  const CAT = { beach: 'chatan naha sesoko churaumi tokashiki miyako iriomote', heritage: 'shuri katsuren sefa peace', nature: 'zanpa maeda manzamo hedo nago kabira yonaguni',
+    town: 'kokusai itoman ishigaki ogimi', island: 'ie kouri zamami kume irabu taketomi hateruma' };
+  for (const p of places) { p.cat = 'nature'; for (const k in CAT) if (CAT[k].split(' ').includes(p.id)) p.cat = k; }
   const regions = [
     { name: 'Okinawa Island', jp: '沖縄本島', b: [-22000, -76000, 64000, 24000] },
     { name: 'Kerama & Kume', jp: '慶良間・久米', b: [-102000, -22000, -30000, 22000] },
@@ -134,5 +139,5 @@ window.RW_DATA = (() => {
   const nickA = ['Chura', 'Tida', 'Sunny', 'Mango', 'Coral', 'Breezy', 'Kariyushi', 'Lagoon', 'Hibiscus', 'Starsand', 'Deigo', 'Shima'];
   const nickB = ['Shisa', 'Turtle', 'Kuina', 'Manta', 'Gurukun', 'Goya', 'Sabani', 'Yamaneko', 'Dugong', 'Sanshin', 'Uminchu', 'Papaya'];
   const shirts = [0xff4fa3, 0x19c8ff, 0x8fe01f, 0xffb23e, 0x9b6bff, 0xff6b4a, 0x21d6b5, 0xffffff];
-  return { foods, words, places, regions, fish, cities, muni, nickA, nickB, shirts };
+  return { foods, words, places, cats, regions, fish, cities, muni, nickA, nickB, shirts };
 })();

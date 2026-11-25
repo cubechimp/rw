@@ -65,15 +65,19 @@ function buildNahaTile(t) {
   const emit = (xs, zs, n, h, fl) => {
     const has2 = fl & 3; let cx = 0, cz = 0, ar = 0, a0 = 1e9, a1 = -1e9, c0 = 1e9, c1 = -1e9;
     for (let i = 0; i < n; i++) { const j = (i + 1) % n; cx += xs[i]; cz += zs[i]; ar += xs[i] * zs[j] - xs[j] * zs[i]; if (xs[i] < a0) a0 = xs[i]; if (xs[i] > a1) a1 = xs[i]; if (zs[i] < c0) c0 = zs[i]; if (zs[i] > c1) c1 = zs[i]; }
-    cx /= n; cz /= n; const gen = fl & 8, g = heightAt(x0 + cx, z0 + cz), y0 = g - 2.5, y1 = g + h, O = has2 ? Bq : A, sg = ar > 0 ? 1 : -1;
+    cx /= n; cz /= n; const gen = fl & 8, g = heightAt(x0 + cx, z0 + cz), y0 = g - 2.5, top = g + h, O = has2 ? Bq : A, sg = ar > 0 ? 1 : -1;
+    // Neighbours in the data often overlap by a few centimetres, which makes their walls and roofs flicker. Draw every building a little
+    // inside its outline and a little taller or shorter, by an amount of its own, so no two surfaces ever share a plane.
+    const ins = .03 + hash(t.tx * 131 + bi, t.tz * 17 + n, 57) * .14, y1 = top + hash(t.tx * 53 + bi, t.tz * 29, 58) * .24, rx = new Float32Array(n), rz = new Float32Array(n);
+    for (let i = 0; i < n; i++) { const dx = xs[i] - cx, dz = zs[i] - cz, k = Math.max(.6, 1 - ins / (Math.hypot(dx, dz) || 1)); rx[i] = cx + dx * k; rz[i] = cz + dz * k; }
     const col = gen ? N_GEN[Math.floor(hash(t.tx * 31 + bi, t.tz, 33) * N_GEN.length)] : N_PAL[Math.floor(hash(t.tx * 977 + bi, t.tz, 31) * N_PAL.length)], roof = gen && h < 5.5 ? [.85, .36, .2] : [col[0] * .8, col[1] * .8, col[2] * .82];
-    gr.push(g); hs.push(h); est.push(fl & 12); cen.push(cx, cz); (has2 ? sB : sA).push(O.p.length / 3, bi); foot.push({ xs, zs, n, a0, a1, c0, c1, top: y1, gen }); bi++;
+    gr.push(g); hs.push(h); est.push(fl & 12); cen.push(cx, cz); (has2 ? sB : sA).push(O.p.length / 3, bi); foot.push({ xs, zs, n, a0, a1, c0, c1, top, gen }); bi++;
     for (let i = 0; i < n; i++) {
-      const j = (i + 1) % n, ax = xs[i], az = zs[i], bx = xs[j], bz = zs[j]; let nx = (bz - az) * sg, nz = -(bx - ax) * sg; const l = Math.hypot(nx, nz) || 1; nx /= l; nz /= l;
+      const j = (i + 1) % n, ax = rx[i], az = rz[i], bx = rx[j], bz = rz[j]; let nx = (bz - az) * sg, nz = -(bx - ax) * sg; const l = Math.hypot(nx, nz) || 1; nx /= l; nz /= l;
       O.p.push(ax, y0, az, bx, y0, bz, bx, y1, bz, ax, y0, az, bx, y1, bz, ax, y1, az);
       for (let k = 0; k < 6; k++) { O.n.push(nx, 0, nz); O.c.push(col[0], col[1], col[2]); O.i.push(g, h); }
     }
-    const cont = Array.from(xs, (v, i) => new T.Vector2(v, zs[i])); if (sg < 0) cont.reverse();
+    const cont = Array.from(rx, (v, i) => new T.Vector2(v, rz[i])); if (sg < 0) cont.reverse();
     for (const f of T.ShapeUtils.triangulateShape(cont, [])) for (const q of f) { O.p.push(cont[q].x, y1, cont[q].y); O.n.push(0, 1, 0); O.c.push(roof[0], roof[1], roof[2]); O.i.push(g, h); }
   };
   while (p < b.length) { const n = b[p++], h = b[p++] / 10, fl = b[p++], xs = new Float32Array(n), zs = new Float32Array(n); let x = 0, z = 0; for (let i = 0; i < n; i++) { x += b[p++]; z += b[p++]; xs[i] = x / 5; zs[i] = z / 5; } emit(xs, zs, n, h, fl); }
