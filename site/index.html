@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Ryukyu World</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=M+PLUS+Rounded+1c:wght@500;800&family=Mochiy+Pop+One&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* layout: full-bleed 3D sea, glossy Aero bubbles floating in the corners, one glass sheet for menus */
+  color-scheme: light;
+  --aqua:#19c8ff; --aqua-deep:#0a6fe0; --lime:#8fe01f; --pink:#ff4fa3; --gold:#ffb23e;
+  --ink:#0b2a5b; --ink-soft:#3c5f96; --glass:rgba(255,255,255,.34); --glass-solid:rgba(240,251,255,.88);
+  --seal:#d8322a;
+  --display:"Mochiy Pop One","M PLUS Rounded 1c","Hiragino Maru Gothic ProN","Arial Rounded MT Bold",system-ui,sans-serif;
+  --body:"M PLUS Rounded 1c","Hiragino Maru Gothic ProN","Segoe UI",system-ui,sans-serif;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0;overflow:hidden;background:#0b63c9;font-family:var(--body);font-weight:500;color:var(--ink);
+  -webkit-user-select:none;user-select:none;overscroll-behavior:none}
+canvas#gl{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+button{font:inherit;color:inherit;cursor:pointer;border:0;background:none;padding:0}
+button:focus-visible{outline:3px solid #fff;outline-offset:2px}
+[hidden]{display:none!important}
+
+/* ---- Aero surfaces ---- */
+.glass{background:linear-gradient(180deg,rgba(255,255,255,.62),rgba(255,255,255,.22) 46%,rgba(190,236,255,.30));
+  border:1px solid rgba(255,255,255,.85);box-shadow:0 6px 18px rgba(6,40,110,.28),inset 0 1px 0 rgba(255,255,255,.9);
+  -webkit-backdrop-filter:blur(10px) saturate(1.4);backdrop-filter:blur(10px) saturate(1.4)}
+.pill{border-radius:999px;padding:6px 14px;font-size:13px;line-height:1.25;white-space:nowrap}
+.bubble{position:relative;width:52px;height:52px;border-radius:50%;display:grid;place-items:center;font-size:22px;color:#fff;
+  background:radial-gradient(circle at 50% 118%,#7df3ff 0,var(--aqua) 38%,var(--aqua-deep) 100%);
+  border:1.5px solid rgba(255,255,255,.9);box-shadow:0 6px 14px rgba(5,40,120,.38),inset 0 -6px 12px rgba(255,255,255,.25);
+  text-shadow:0 1px 2px rgba(0,40,110,.6);transition:transform .08s}
+.bubble::before{content:"";position:absolute;left:14%;right:14%;top:5%;height:44%;border-radius:50%;
+  background:linear-gradient(180deg,rgba(255,255,255,.92),rgba(255,255,255,.08));pointer-events:none}
+.bubble:active,.bubble.on{transform:scale(.93)}
+.bubble.lime{background:radial-gradient(circle at 50% 118%,#e7ff8a 0,var(--lime) 40%,#2f9c16 100%)}
+.bubble.pink{background:radial-gradient(circle at 50% 118%,#ffd0e6 0,var(--pink) 42%,#c2187a 100%)}
+.bubble.gold{background:radial-gradient(circle at 50% 118%,#fff3b5 0,var(--gold) 42%,#e2681a 100%)}
+.bubble.big{width:76px;height:76px;font-size:15px;font-family:var(--display);line-height:1.05}
+.bubble.sm{width:44px;height:44px;font-size:19px}
+.bubble.sel{box-shadow:0 0 0 3px #fff,0 0 16px 4px rgba(255,255,255,.8)}
+.bubble svg{width:56%;height:56%;position:relative}
+.bubble span{position:relative}
+
+/* ---- HUD ---- */
+#hud{position:fixed;inset:0;pointer-events:none}
+#hud>*{pointer-events:auto;position:absolute}
+.tl{left:12px;top:12px;display:flex;flex-direction:column;gap:8px;align-items:flex-start;max-width:56vw}
+#loc b{font-weight:800} #loc small{display:block;color:var(--ink-soft);font-size:11px;font-variant-numeric:tabular-nums}
+#mini{width:104px;height:104px;border-radius:50%;border:2px solid rgba(255,255,255,.95);
+  box-shadow:0 6px 16px rgba(5,40,110,.4),inset 0 0 12px rgba(255,255,255,.5)}
+.tr{right:12px;top:12px;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;max-width:40vw}
+.tc{left:50%;top:12px;transform:translateX(-50%);display:flex;flex-direction:column;gap:6px;align-items:center;pointer-events:none!important}
+#target{font-size:12px;max-width:44vw;overflow:hidden;text-overflow:ellipsis}
+#target i{display:inline-block;font-style:normal;margin-right:4px;transition:transform .2s}
+.stats{left:12px;top:182px;border-radius:16px;padding:8px 12px;display:flex;flex-direction:column;gap:5px;font-size:13px;min-width:112px}
+.stats .row{display:flex;align-items:center;gap:6px}
+.orb{width:14px;height:14px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff,#6fe9ff 40%,#0a86e6);box-shadow:0 0 6px #7ff}
+#energy{height:9px;border-radius:9px;background:rgba(10,60,130,.25);overflow:hidden;flex:1;border:1px solid rgba(255,255,255,.8)}
+#energy i{display:block;height:100%;width:60%;background:linear-gradient(180deg,#eaff9a,var(--lime) 55%,#3fae1c);border-radius:9px}
+#buff{font-size:11px;color:var(--ink-soft);min-height:14px}
+#stick{left:18px;bottom:22px;width:132px;height:132px;border-radius:50%;touch-action:none;
+  background:radial-gradient(circle,rgba(255,255,255,.10) 55%,rgba(255,255,255,.34) 100%);border:1.5px solid rgba(255,255,255,.75)}
+#knob{position:absolute;left:50%;top:50%;width:56px;height:56px;margin:-28px;border-radius:50%;pointer-events:none;
+  background:radial-gradient(circle at 50% 120%,#bff6ff,var(--aqua) 45%,var(--aqua-deep));border:1.5px solid #fff;
+  box-shadow:0 4px 10px rgba(5,40,120,.4),inset 0 10px 10px rgba(255,255,255,.55)}
+.br{right:14px;bottom:20px;display:grid;grid-template-columns:auto auto;gap:10px;align-items:end;justify-items:end}
+.crafts{grid-column:1/3;display:flex;gap:8px}
+#act{grid-column:1/3;border-radius:999px;padding:11px 20px;font-family:var(--display);font-size:15px;color:#fff;
+  background:linear-gradient(180deg,#ffd9ec 0,var(--pink) 38%,#c2187a 100%);border:1.5px solid #fff;
+  box-shadow:0 6px 16px rgba(120,10,80,.45),inset 0 10px 8px rgba(255,255,255,.35);text-shadow:0 1px 2px rgba(90,0,60,.6);max-width:64vw;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#emotes{right:14px;top:74px;display:flex;flex-direction:column;gap:6px;align-items:flex-end}
+#emotes button{font-size:12px;font-weight:800}
+#toast{position:fixed;left:50%;top:88px;transform:translateX(-50%);display:flex;flex-direction:column;gap:6px;align-items:center;pointer-events:none;width:min(92vw,460px)}
+#toast div{border-radius:16px;padding:8px 16px;font-size:14px;text-align:center;animation:pop .35s cubic-bezier(.2,1.6,.4,1)}
+#toast b{font-weight:800}
+@keyframes pop{from{transform:scale(.6);opacity:0}}
+
+/* ---- title ---- */
+#title{position:fixed;inset:0;display:grid;place-items:center;padding:16px;
+  background:radial-gradient(120% 80% at 50% 110%,rgba(255,120,170,.28),transparent 60%),linear-gradient(180deg,rgba(20,60,170,.25),rgba(10,30,90,.05))}
+.card{width:min(440px,100%);border-radius:28px;padding:22px 22px 18px;text-align:center;max-height:100%;overflow:auto}
+.logo{font-family:var(--display);font-size:clamp(34px,10vw,52px);line-height:1;margin:0;letter-spacing:.01em;
+  background:linear-gradient(180deg,#fff 8%,#b9f4ff 34%,#19c8ff 52%,#0a56d8 78%,#ff4fa3 100%);-webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 2px 0 #fff) drop-shadow(0 5px 10px rgba(5,30,110,.55))}
+.logo-jp{font-family:var(--display);font-size:17px;color:#fff;letter-spacing:.5em;margin:6px 0 2px;padding-left:.5em;text-shadow:0 2px 6px rgba(5,30,110,.8)}
+.tag{font-size:14px;margin:8px 0 14px;color:var(--ink)}
+.namerow{display:flex;gap:8px;align-items:center;justify-content:center;margin:6px 0 10px}
+#nick{font-weight:800;font-size:17px;padding:8px 16px;border-radius:999px;background:var(--glass-solid);border:1px solid #fff;min-width:170px}
+.swatches{display:flex;gap:8px;justify-content:center;margin-bottom:14px;flex-wrap:wrap}
+.swatches button{width:30px;height:30px;border-radius:50%;border:2px solid #fff;box-shadow:inset 0 8px 6px rgba(255,255,255,.5),0 2px 6px rgba(0,30,90,.4)}
+.swatches button[aria-pressed=true]{outline:3px solid var(--ink);outline-offset:2px}
+.go{font-family:var(--display);font-size:20px;color:#fff;padding:14px 34px;border-radius:999px;border:2px solid #fff;
+  background:linear-gradient(180deg,#f2ffb8 0,var(--lime) 36%,#2c9a14 100%);box-shadow:0 8px 20px rgba(20,90,10,.5),inset 0 12px 10px rgba(255,255,255,.45);
+  text-shadow:0 1px 3px rgba(10,70,0,.7)}
+.go:disabled{filter:grayscale(.7);opacity:.75}
+.fine{font-size:11px;color:var(--ink-soft);margin:12px 0 0;line-height:1.5}
+.fine a{color:var(--aqua-deep)}
+
+/* ---- modal ---- */
+#modal{position:fixed;inset:0;display:grid;place-items:center;padding:14px;background:rgba(8,30,90,.35)}
+.sheet{position:relative;width:min(560px,100%);max-height:100%;overflow:auto;border-radius:24px;padding:18px 18px 16px;
+  background:linear-gradient(180deg,rgba(255,255,255,.95),rgba(226,247,255,.92))}
+.sheet h2{font-family:var(--display);font-size:22px;margin:0 44px 2px 0;color:var(--aqua-deep);text-wrap:balance}
+.sheet h2 small{display:block;font-family:var(--body);font-weight:800;font-size:14px;color:var(--pink);letter-spacing:.08em}
+.sheet p{margin:8px 0;font-size:14px;line-height:1.55;max-width:60ch}
+#close{position:absolute;right:12px;top:12px}
+.acts{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.act{display:flex;gap:12px;align-items:center;text-align:left;padding:10px 14px;border-radius:16px;font-size:14px;
+  background:linear-gradient(180deg,#fff,#d9f4ff);border:1px solid #9fdcff;box-shadow:inset 0 1px 0 #fff,0 2px 6px rgba(5,60,140,.15)}
+.act:active{transform:scale(.985)} .act:disabled{opacity:.55}
+.act .ic{font-size:26px;width:36px;text-align:center;flex:none}
+.act b{display:block;font-weight:800} .act small{color:var(--ink-soft)}
+.word{margin-top:12px;padding:10px 14px;border-radius:16px;background:linear-gradient(180deg,#fff5fa,#ffe0ee);border:1px solid #ffb5d6;font-size:13px}
+.word b{font-family:var(--display);font-size:17px;color:#c2187a;display:block}
+.seal{width:92px;height:92px;border-radius:50%;border:3px double var(--seal);color:var(--seal);display:grid;place-items:center;text-align:center;
+  font-family:var(--display);font-size:15px;line-height:1.15;transform:rotate(-8deg);padding:8px;flex:none;background:rgba(216,50,42,.04)}
+.seal.off{border-color:#b9c6d6;color:#b9c6d6;transform:none;background:none}
+.seal small{display:block;font-family:var(--body);font-size:9px;font-weight:800;letter-spacing:.04em}
+.head{display:flex;gap:14px;align-items:center}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}
+.tabs button{padding:6px 12px;border-radius:999px;font-size:13px;font-weight:800;background:#d9f4ff;border:1px solid #9fdcff}
+.tabs button[aria-selected=true]{background:linear-gradient(180deg,#7de3ff,var(--aqua-deep));color:#fff;border-color:#fff}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:10px;justify-items:center}
+.list{display:flex;flex-direction:column;gap:6px}
+.item{display:flex;gap:10px;align-items:flex-start;padding:8px 12px;border-radius:14px;background:#fff;border:1px solid #cfeaff;font-size:13px;line-height:1.45}
+.item.off{opacity:.5} .item .ic{font-size:22px;flex:none;width:30px;text-align:center}
+#mapwrap{position:relative;border-radius:16px;overflow:hidden;border:1px solid #9fdcff;background:#1a8ee8}
+#map{display:block;width:100%;height:auto}
+.dot{position:absolute;width:26px;height:26px;margin:-13px;border-radius:50%;border:2px solid #fff;background:var(--pink);
+  box-shadow:0 2px 6px rgba(0,30,90,.5),inset 0 6px 5px rgba(255,255,255,.5);font-size:10px;font-weight:800;color:#fff}
+.dot.seen{background:var(--aqua)} .dot.sel{outline:3px solid var(--gold);outline-offset:1px;z-index:2}
+.dot.peer{background:var(--lime);width:16px;height:16px;margin:-8px}
+.pads{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}
+.pad{aspect-ratio:1;border-radius:18px;font-family:var(--display);font-size:22px;color:#fff;border:1.5px solid #fff;
+  background:linear-gradient(180deg,#ffe2a8,var(--gold) 45%,#d05a12);box-shadow:inset 0 10px 8px rgba(255,255,255,.4),0 4px 10px rgba(120,50,0,.35)}
+.pad small{display:block;font-family:var(--body);font-size:11px;font-weight:800}
+.pad:active,.pad.hit{transform:scale(.94);filter:brightness(1.2)}
+#fade{position:fixed;inset:0;background:radial-gradient(circle,#bff3ff,#19a8ff 60%,#0a56d8);opacity:0;pointer-events:none;transition:opacity .45s;
+  display:grid;place-items:center;font-family:var(--display);color:#fff;font-size:22px;text-shadow:0 2px 8px rgba(0,40,120,.7);text-align:center;padding:20px}
+#fade.on{opacity:1;pointer-events:auto}
+#chill{position:fixed;left:50%;bottom:24px;transform:translateX(-50%)}
+@media (max-width:640px){
+  .tl{max-width:60vw} #loc{max-width:58vw;overflow:hidden;text-overflow:ellipsis}
+  #mini{width:84px;height:84px}
+  .tr{display:grid;grid-template-columns:44px 44px;gap:6px;max-width:none} .tr .bubble{width:44px;height:44px;font-size:18px}
+  .tc{left:106px;top:64px;transform:none;align-items:flex-start}
+  #target,#online{max-width:calc(100vw - 232px);overflow:hidden;text-overflow:ellipsis;font-size:11px;padding:5px 10px}
+  #emotes{top:114px} #emotes button{padding:5px 10px;font-size:11px}
+  .stats{top:158px} #toast{top:238px}
+  .bubble.big{width:68px;height:68px;font-size:14px}
+}
+@media (max-height:480px){#mini{width:72px;height:72px}.stats{top:auto;bottom:164px}#stick{width:112px;height:112px}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+/* ---- pixel menu style (GBA-era RPG look): paper boxes, coloured band, dark outline, hard shadows ---- */
+body.gba{--display:"DotGothic16","M PLUS Rounded 1c",monospace;--body:"DotGothic16","M PLUS Rounded 1c",monospace;font-weight:400}
+body.gba .glass,body.gba .sheet,body.gba .act,body.gba .item,body.gba .word,body.gba #nick{background:#f8f8f0;border:2px solid #384858;border-radius:6px;color:#384048;
+  box-shadow:inset 0 0 0 3px #5890d8,inset 0 0 0 4px #fff,3px 3px 0 rgba(20,30,50,.45);-webkit-backdrop-filter:none;backdrop-filter:none}
+body.gba .pill{border-radius:6px;padding:8px 12px}
+body.gba .item,body.gba .word{box-shadow:inset 0 0 0 2px #a8b8c8}
+body.gba .word b,body.gba .sheet h2{font-family:var(--display);color:#2860b8} body.gba .sheet h2 small{color:#e06058}
+body.gba .act{box-shadow:inset 0 0 0 3px #5890d8,2px 2px 0 rgba(20,30,50,.35)} body.gba .act:active{background:#c8dcf0}
+body.gba .bubble{border-radius:8px;background:#f8f8f0;border:2px solid #384858;color:#384048;text-shadow:none;box-shadow:inset 0 0 0 3px #5890d8,3px 3px 0 rgba(20,30,50,.45)}
+body.gba .bubble::before{display:none} body.gba .bubble svg{stroke:#384048}
+body.gba .bubble.lime{background:#e8f8e4;box-shadow:inset 0 0 0 3px #58b068,3px 3px 0 rgba(20,30,50,.45)}
+body.gba .bubble.gold{background:#fff4dc;box-shadow:inset 0 0 0 3px #f0a040,3px 3px 0 rgba(20,30,50,.45)}
+body.gba .bubble.pink{background:#ffe8e4;box-shadow:inset 0 0 0 3px #e06058,3px 3px 0 rgba(20,30,50,.45)}
+body.gba .bubble.sel{background:#c8dcf0;box-shadow:inset 0 0 0 3px #3868b8,3px 3px 0 rgba(20,30,50,.45)}
+body.gba .bubble:active,body.gba .bubble.on{transform:translate(2px,2px);box-shadow:inset 0 0 0 3px #3868b8}
+body.gba #act,body.gba .go{border-radius:8px;background:#ffe8e4;color:#384048;border:2px solid #384858;text-shadow:none;box-shadow:inset 0 0 0 3px #e06058,3px 3px 0 rgba(20,30,50,.45)}
+body.gba .go{background:#e8f8e4;box-shadow:inset 0 0 0 3px #58b068,3px 3px 0 rgba(20,30,50,.45)}
+body.gba .logo{background:none;-webkit-background-clip:border-box;background-clip:border-box;color:#2860b8;filter:none;text-shadow:3px 3px 0 #a8c8f0}
+body.gba .logo-jp{color:#e06058;text-shadow:none} body.gba .tag,body.gba .fine{color:#384048}
+body.gba #mini{border-radius:8px;border:2px solid #384858;box-shadow:0 0 0 3px #5890d8,0 0 0 5px #384858,5px 5px 0 2px rgba(20,30,50,.4);image-rendering:pixelated}
+body.gba #stick{background:rgba(248,248,240,.28);border:2px solid #384858} body.gba #knob{background:#5890d8;border:2px solid #384858;box-shadow:inset 0 0 0 2px #a8c8f0}
+body.gba .tabs button{border-radius:6px;background:#f8f8f0;border:2px solid #384858;font-weight:400}
+body.gba .tabs button[aria-selected=true]{background:#c8dcf0;color:#384048;border-color:#384858}
+body.gba .dot{border-radius:4px;border:2px solid #384858;box-shadow:none} body.gba .orb{border-radius:2px;background:#58c8f0;box-shadow:none;border:2px solid #384858}
+body.gba .pad{border-radius:8px;background:#fff4dc;border:2px solid #384858;color:#384048;box-shadow:inset 0 0 0 3px #f0a040,3px 3px 0 rgba(20,30,50,.4)}
+body.gba #title{background:rgba(20,40,90,.22)} body.gba #modal{background:rgba(20,30,50,.45)} body.gba #emotes button{font-weight:400}
+body.gba #fade{background:#5890d8;font-family:var(--display)}
+</style>
+</head>
+<body>
+<canvas id="gl" aria-label="Ryukyu World 3D view"></canvas>
+
+<div id="hud" hidden>
+  <div class="tl">
+    <div id="loc" class="glass pill"><b>—</b><small>—</small></div>
+    <canvas id="mini" width="208" height="208" aria-label="Minimap"></canvas>
+  </div>
+  <div class="tc">
+    <div id="target" class="glass pill"><i>▲</i><span>—</span></div>
+    <div id="online" class="glass pill">Solo session</div>
+  </div>
+  <div class="tr">
+    <button class="bubble" id="bMap" aria-label="Island map" title="Island map (M)"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linejoin="round"><path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z"/><path d="M9 4v14M15 6v14"/></svg></button>
+    <button class="bubble pink" id="bBook" aria-label="Passport" title="Passport (P)"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="2"/><circle cx="12" cy="10" r="3"/><path d="M9 17h6"/></svg></button>
+    <button class="bubble gold" id="bSky" aria-label="Change time of day" title="Time of day"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"><path d="M4 17h16M7 17a5 5 0 0110 0M12 5v3M5 9l2 2M19 9l-2 2M8 21h8"/></svg></button>
+    <button class="bubble lime" id="bSnd" aria-label="Sound on or off" title="Sound"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10v4h4l5 4V6L8 10z"/><path id="sndw" d="M16.5 9a4 4 0 010 6M19 6.5a8 8 0 010 11"/></svg></button>
+  </div>
+  <div id="emotes">
+    <button class="glass pill" data-e="0">Haisai! 👋</button>
+    <button class="glass pill" data-e="1">Māsan! 😋</button>
+    <button class="glass pill" data-e="2">Chura! ✨</button>
+  </div>
+  <div class="stats glass">
+    <div class="row"><span class="orb"></span><b id="glass">0</b><span>Ryukyu glass</span></div>
+    <div id="buff"></div>
+  </div>
+  <div id="stick" aria-label="Move"><div id="knob"></div></div>
+  <div class="br">
+    <div class="crafts" role="group" aria-label="Choose your ride">
+      <button class="bubble sm sel" id="bBike" aria-label="Bicycle on land" title="Bicycle on land (B)"><span>🚲</span></button>
+      <button class="bubble sm sel" data-craft="jetski" aria-label="Jet ski" title="Jet ski (1)"><span>🚤</span></button>
+      <button class="bubble sm" data-craft="sabani" aria-label="Sabani sailing canoe" title="Sabani (2)"><span>⛵</span></button>
+      <button class="bubble sm" data-craft="sup" aria-label="Stand-up paddle board" title="SUP (3)"><span>🏄</span></button>
+    </div>
+    <button id="act" hidden>Action</button>
+    <button class="bubble big lime" id="bJump" aria-label="Jump"><span>Hop</span></button>
+    <button class="bubble big gold" id="bBoost" aria-label="Boost"><span>Boost</span></button>
+  </div>
+</div>
+
+<div id="toast" aria-live="polite"></div>
+
+<div id="title">
+  <div class="card glass">
+    <h1 class="logo">Ryukyu World</h1>
+    <div class="logo-jp">琉球ワールド</div>
+    <p class="tag">All of Okinawa at true scale. Ride the lagoon, eat island food, collect stamps, say <b>haisai</b>.</p>
+    <div class="namerow"><span id="nick">…</span><button class="bubble sm" id="reroll" aria-label="New island name" title="New island name"><span>🎲</span></button></div>
+    <div class="swatches" id="swatches" role="group" aria-label="Shirt colour"></div>
+    <div><button class="glass pill" id="style" style="margin-bottom:12px">Menu style: Pixel</button></div>
+    <button class="go" id="go" disabled>Loading the islands…</button>
+    <p class="fine">Move: stick or WASD · Look: drag · Boost: Shift · Hop: Space · Action: E · Bicycle: B<br>
+      Naha buildings and roads: 3D都市モデル Project PLATEAU（国土交通省）. Other buildings, roads and places: © OpenStreetMap contributors, Overture Maps Foundation. Coastline: 国土数値情報（行政区域データ）国土交通省. Outside Naha, hills and towns are stylized, not surveyed.</p>
+  </div>
+</div>
+
+<div id="modal" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+    <button class="bubble sm pink" id="close" aria-label="Close"><span>✕</span></button>
+    <div id="mBody"></div>
+  </div>
+</div>
+<button class="glass pill" id="chill" hidden>Stand up</button>
+<div id="fade"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+<script src="data.js"></script>
+<script src="engine.js"></script>
+<script src="actors.js"></script>
+<script src="naha.js"></script>
+<script src="ui.js"></script>
+</body>
+</html>

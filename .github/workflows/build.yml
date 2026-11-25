@@ -1,0 +1,47 @@
+name: Build and publish
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: '17 3 1 * *'      # refresh the map data on the 1st of each month
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install map tools
+        run: pip install overturemaps geopandas pyarrow shapely numpy pillow
+      - name: Build prefecture buildings, roads and places (Overture Maps)
+        id: pref
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          mkdir -p site/pref
+          python pipeline/build_pref.py site/pref work 2>&1 | tee site/pref-build-log.txt
+      - name: Drop half-built prefecture data if the build failed
+        if: steps.pref.outcome != 'success'
+        run: rm -f site/pref/*.json
+      - name: Publish the site to the gh-pages branch
+        run: |
+          cd site
+          touch .nojekyll
+          git init -q -b gh-pages
+          git config user.name "ryukyu-world build"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Publish ${GITHUB_SHA::7} (prefecture data: ${{ steps.pref.outcome }})"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}" gh-pages
