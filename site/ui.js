@@ -418,7 +418,7 @@ function frame(now) {
   if (started) updatePlayer(dt); else { me.position.set(P.x - OX, P.y, P.z - OZ); }
   if (Math.abs(P.x - OX) > 9000 || Math.abs(P.z - OZ) > 9000) rebase(P.x, P.z);
   planChunks(P.x, P.z); pumpChunks(MOBILE ? 5 : 7); if (instDirty) rebuildInstances();
-  updateNaha(P.x, P.z, 1); updateTraffic(dt);
+  updateNaha(P.x, P.z, 1); updateKit(dt); updateTraffic(dt);
   updateShore(P.x, P.z, false); shoreRectSync();
   updateCamera(dt);
   const under = camera.position.y < waveH(camera.position.x, camera.position.z, tNow) - .05 && P.diving;
@@ -443,7 +443,7 @@ async function boot(data) {
   applyMood(false); requestAnimationFrame(frame);
   const go = $('#go'); go.disabled = false; go.textContent = 'Haisai! Dive in';
   initRoom(); setInterval(() => { if (started) save(); }, 6000);
-  window.__rw = { P, S, cam, renderer, NAHA, nahaReady, nahaPick, nahaBlocked, toggleBike, toggleFly, setLand, TRAFFIC, INST, startTow, endTow, openSports, atShore, seaNear, enterShop, leaveShop, openShop, openBiz, shopsAtDoor, currentAction, get inside() { return INSIDE; }, INST, startDive, setMood: (m) => { moodAuto = false; moodT = m; }, travelTo, setPos, openPlace, openMap, openPassport, PLACES, get frames() { return frameCount; } };
+  window.__rw = { P, S, cam, renderer, NAHA, nahaReady, nahaPick, nahaBlocked, toggleBike, toggleFly, setLand, TRAFFIC, KIT, INST, startTow, endTow, openSports, atShore, seaNear, enterShop, leaveShop, openShop, openBiz, shopsAtDoor, currentAction, get inside() { return INSIDE; }, INST, startDive, setMood: (m) => { moodAuto = false; moodT = m; }, travelTo, setPos, openPlace, openMap, openPassport, PLACES, get frames() { return frameCount; } };
 }
 const HOT = window.claude && window.claude.hot;
 if (HOT && HOT.snapshot) HOT.snapshot(() => JSON.parse(JSON.stringify(S)));

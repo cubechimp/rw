@@ -4,14 +4,16 @@ const NAHA = { idx: null, tiles: new Map(), size: 768, sets: [] };
 const N_PAL = [0xf4efe6, 0xe9e4da, 0xdfe7ea, 0xf3e3d3, 0xe6d9c8, 0xd9e3d6, 0xf6e9ee, 0xcfd6dc, 0xfff6dc, 0xd8cfc4].map(hex3);
 const bldMat = new T.ShaderMaterial({
   uniforms: U, side: T.DoubleSide,
-  vertexShader: `attribute vec3 aCol;attribute vec2 aInfo;varying vec3 vCol,vN,vW;varying vec2 vInfo;varying float vSeed;
-    void main(){vCol=aCol;vInfo=aInfo;vSeed=floor(fract(aInfo.x*3.7+aInfo.y*1.3)*997.);vec4 w=modelMatrix*vec4(position,1.);vW=w.xyz;vN=normal;gl_Position=projectionMatrix*viewMatrix*w;}`,
-  fragmentShader: `varying vec3 vCol,vN,vW;varying vec2 vInfo;varying float vSeed;${GL_COMMON}
+  vertexShader: `attribute vec3 aCol;attribute vec4 aInfo;uniform vec3 uKit;varying vec3 vCol,vN,vW;varying vec2 vInfo;varying float vSeed,vKit;
+    void main(){vCol=aCol;vInfo=aInfo.xy;vSeed=floor(fract(aInfo.x*3.7+aInfo.y*1.3)*997.);
+      vKit=uKit.z>0.&&distance((modelMatrix*vec4(aInfo.z,0.,aInfo.w,1.)).xz,uKit.xy)<uKit.z?1.:0.;      // this building wears real window and door pieces: don't paint any on
+      vec4 w=modelMatrix*vec4(position,1.);vW=w.xyz;vN=normal;gl_Position=projectionMatrix*viewMatrix*w;}`,
+  fragmentShader: `varying vec3 vCol,vN,vW;varying vec2 vInfo;varying float vSeed,vKit;${GL_COMMON}
     void main(){
       if(distance(vW.xz,uRing.xy)>uRing.z+45.)discard;
       vec3 n=normalize(vN);if(!gl_FrontFacing)n=-n;
       vec3 col=vCol;float glow=0.;
-      if(abs(n.y)<.5){
+      if(abs(n.y)<.5&&vKit<.5){
         vec2 t=normalize(vec2(-n.z,n.x)+1e-5);float u=dot(vW.xz,t),v=vW.y-vInfo.x;
         float sid=floor(vSeed+.5),seed=hsh(vec2(sid,sid*.61+7.));      // a whole number per building, so it is the same on every pixel
         vec2 cell=vec2(floor(u/3.),floor(v/3.2)),f=vec2(fract(u/3.),fract(v/3.2));
@@ -56,7 +58,7 @@ function nahaHasReal(cx, cz, buildings) { const k = Math.floor(cx / 2) + '_' + M
 function nMesh(g, T_) { const m = new T.Mesh(g, bldMat); m.matrixAutoUpdate = false; m.position.set(T_.tx * NAHA.size - OX, 0, T_.tz * NAHA.size - OZ); m.updateMatrix(); g.computeBoundingSphere(); scene.add(m); return m; }
 function nGeo(B) {
   const g = new T.BufferGeometry(); g.setAttribute('position', new T.Float32BufferAttribute(B.p, 3)); g.setAttribute('normal', new T.Float32BufferAttribute(B.n, 3));
-  g.setAttribute('aCol', new T.Float32BufferAttribute(B.c, 3)); g.setAttribute('aInfo', new T.Float32BufferAttribute(B.i, 2)); return g;
+  g.setAttribute('aCol', new T.Float32BufferAttribute(B.c, 3)); g.setAttribute('aInfo', new T.Float32BufferAttribute(B.i, 4)); return g;
 }
 const N_GEN = [[.98, .95, .88], [.95, .9, .84], [.9, .95, .97], [1, .93, .9]];
 function buildNahaTile(t) {
@@ -70,15 +72,16 @@ function buildNahaTile(t) {
     // inside its outline and a little taller or shorter, by an amount of its own, so no two surfaces ever share a plane.
     const ins = .03 + hash(t.tx * 131 + bi, t.tz * 17 + n, 57) * .14, y1 = top + hash(t.tx * 53 + bi, t.tz * 29, 58) * .24, rx = new Float32Array(n), rz = new Float32Array(n);
     for (let i = 0; i < n; i++) { const dx = xs[i] - cx, dz = zs[i] - cz, k = Math.max(.6, 1 - ins / (Math.hypot(dx, dz) || 1)); rx[i] = cx + dx * k; rz[i] = cz + dz * k; }
+    const kx = has2 ? 1e7 : cx, kz = has2 ? 1e7 : cz;      // the centre the shader measures from when deciding who wears kit pieces
     const col = gen ? N_GEN[Math.floor(hash(t.tx * 31 + bi, t.tz, 33) * N_GEN.length)] : N_PAL[Math.floor(hash(t.tx * 977 + bi, t.tz, 31) * N_PAL.length)], roof = gen && h < 5.5 ? [.85, .36, .2] : [col[0] * .8, col[1] * .8, col[2] * .82];
-    gr.push(g); hs.push(h); est.push(fl & 12); cen.push(cx, cz); (has2 ? sB : sA).push(O.p.length / 3, bi); foot.push({ xs, zs, n, a0, a1, c0, c1, top, gen }); bi++;
+    gr.push(g); hs.push(h); est.push(fl & 12); cen.push(cx, cz); (has2 ? sB : sA).push(O.p.length / 3, bi); foot.push({ xs, zs, n, a0, a1, c0, c1, top, gen, g, h, cx, cz, ins, has2 }); bi++;
     for (let i = 0; i < n; i++) {
       const j = (i + 1) % n, ax = rx[i], az = rz[i], bx = rx[j], bz = rz[j]; let nx = (bz - az) * sg, nz = -(bx - ax) * sg; const l = Math.hypot(nx, nz) || 1; nx /= l; nz /= l;
       O.p.push(ax, y0, az, bx, y0, bz, bx, y1, bz, ax, y0, az, bx, y1, bz, ax, y1, az);
-      for (let k = 0; k < 6; k++) { O.n.push(nx, 0, nz); O.c.push(col[0], col[1], col[2]); O.i.push(g, h); }
+      for (let k = 0; k < 6; k++) { O.n.push(nx, 0, nz); O.c.push(col[0], col[1], col[2]); O.i.push(g, h, kx, kz); }
     }
     const cont = Array.from(rx, (v, i) => new T.Vector2(v, rz[i])); if (sg < 0) cont.reverse();
-    for (const f of T.ShapeUtils.triangulateShape(cont, [])) for (const q of f) { O.p.push(cont[q].x, y1, cont[q].y); O.n.push(0, 1, 0); O.c.push(roof[0], roof[1], roof[2]); O.i.push(g, h); }
+    for (const f of T.ShapeUtils.triangulateShape(cont, [])) for (const q of f) { O.p.push(cont[q].x, y1, cont[q].y); O.n.push(0, 1, 0); O.c.push(roof[0], roof[1], roof[2]); O.i.push(g, h, kx, kz); }
   };
   while (p < b.length) { const n = b[p++], h = b[p++] / 10, fl = b[p++], xs = new Float32Array(n), zs = new Float32Array(n); let x = 0, z = 0; for (let i = 0; i < n; i++) { x += b[p++]; z += b[p++]; xs[i] = x / 5; zs[i] = z / 5; } emit(xs, zs, n, h, fl); }
   const real = bi; let tex = null, img = null; const RK = 512 / S; t.roads = [];
@@ -152,7 +155,7 @@ function buildNahaLod2(t) {
         const ax = v[a] / 10, ay = g + v[a + 1] / 10, az = v[a + 2] / 10, bx = v[b] / 10, by = g + v[b + 1] / 10, bz = v[b + 2] / 10, dx = v[d] / 10, dy = g + v[d + 1] / 10, dz = v[d + 2] / 10;
         let nx = (by - ay) * (dz - az) - (bz - az) * (dy - ay), ny = (bz - az) * (dx - ax) - (bx - ax) * (dz - az), nz = (bx - ax) * (dy - ay) - (by - ay) * (dx - ax); const l = Math.hypot(nx, ny, nz); if (l < 1e-6) continue;
         nx /= l; ny /= l; nz /= l; if (ny < -.5) { nx = -nx; ny = -ny; nz = -nz; }
-        O.p.push(ax, ay, az, bx, by, bz, dx, dy, dz); for (let q = 0; q < 3; q++) { O.n.push(nx, ny, nz); O.c.push(c[0], c[1], c[2]); O.i.push(g, h); }
+        O.p.push(ax, ay, az, bx, by, bz, dx, dy, dz); for (let q = 0; q < 3; q++) { O.n.push(nx, ny, nz); O.c.push(c[0], c[1], c[2]); O.i.push(g, h, 1e7, 1e7); }
       }
     }
   }

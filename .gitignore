@@ -1,3 +1,6 @@
 work/
 __pycache__/
 *.parquet
+
+# licensed third-party asset bakes: the licence does not allow handing the files out, so they stay out of this public repository
+site/kit/

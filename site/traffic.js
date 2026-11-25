@@ -58,7 +58,7 @@ function trafficSpawn(e, tiles) {
     const rd = tileRoads(t); if (!rd.length) continue; const r = rd[Math.floor(Math.random() * rd.length)]; if (e.car ? r.w < 4.5 : r.w > 14) continue;
     const s = Math.random() * r.L, p = roadAt(r, s, _ra), wx = t.tx * S + p.x, wz = t.tz * S + p.z, d = Math.hypot(wx - P.x, wz - P.z);
     if (d < near || d > far || heightAt(wx, wz) < .4) continue;
-    e.r = r; e.s = s; e.dir = Math.random() < .5 ? 1 : -1; e.v = 0; e.h = null; e.ph = Math.random() * 6; e.side = Math.random() < .5 ? 1 : -1; e.chk = Math.random() * .5; e.size = .82 + Math.random() * .3;
+    e.r = r; e.s = s; e.dir = Math.random() < .5 ? 1 : -1; e.v = 0; e.h = null; e.ph = Math.random() * 6; e.side = Math.random() < .5 ? 1 : -1; e.chk = Math.random() * .5; e.size = .82 + Math.random() * .3; e.truck = Math.random() < .25;
     e.top = e.car ? (r.w >= 9 ? 12.5 : r.w >= 6 ? 9.5 : 7) * (.85 + Math.random() * .3) : 1.2 + Math.random() * .8;
     e.col = e.car ? CAR_COL[Math.floor(Math.random() * CAR_COL.length)] : hex3(DATA.shirts[Math.floor(Math.random() * DATA.shirts.length)]); return;
   }
@@ -66,7 +66,7 @@ function trafficSpawn(e, tiles) {
 function updateTraffic(dt) {
   const C = INST.car, D = INST.ped; if (!started || INSIDE || !NAHA.idx) { C.mesh.count = D.mesh.count = 0; return; }
   const S = NAHA.size, T_ = TRAFFIC; T_.poolT -= dt; if (T_.poolT <= 0) { T_.poolT = 1; T_.pool = roadTiles(); }
-  let nc = 0, np = 0;
+  let nc = 0, np = 0; const kw = KIT.ready ? KIT.m.KeiCar_Wagon_White : null, kt = KIT.ready ? KIT.m.KeiCar_Truck_White : null; let nw = 0, nt = 0;
   for (const e of T_.cars.concat(T_.peds)) {
     const live = e.r && e.r.t.state === 3 && NAHA.tiles.get('pref:' + e.r.t.key) === e.r.t;
     if (!live) { e.r = null; e.wait -= dt; if (e.wait <= 0) { e.wait = .2 + Math.random() * .5; trafficSpawn(e, T_.pool); } if (!e.r) continue; }
@@ -88,6 +88,10 @@ function updateTraffic(dt) {
     e.s += e.dir * e.v * dt; if (e.s > r.L || e.s < 0) roadNext(e);
     const y = groundAt(x, z), hd = Math.atan2(fx, -fz); if (e.h === null) e.h = hd; else { const dh = Math.atan2(Math.sin(hd - e.h), Math.cos(hd - e.h)); e.h += dh * Math.min(1, dt * (e.car ? 5 : 8)); }
     if (e.car) {
+      if (kw) {      // with the building kit loaded, traffic uses its kei wagon and kei truck
+        const K = e.truck ? kt : kw, i = e.truck ? nt : nw; if (i >= K.cap) continue;
+        _m.compose(_p.set(x - OX, y, z - OZ), _q.setFromEuler(T_.eul.set(0, -e.h + KIT.carYaw, 0)), _s.set(1.18, 1.18, 1.18)); _m.toArray(K.mesh.instanceMatrix.array, i * 16); K.mesh.instanceColor.array.set(e.truck ? CAR_COL[0] : e.col, i * 3); if (e.truck) nt++; else nw++; continue;
+      }
       if (nc >= C.cap) continue; const sh = Math.sin(e.h), ch = Math.cos(e.h), pitch = Math.atan2(groundAt(x + sh * 1.2, z - ch * 1.2) - groundAt(x - sh * 1.2, z + ch * 1.2), 2.4);
       _m.compose(_p.set(x - OX, y, z - OZ), _q.setFromEuler(T_.eul.set(clamp(pitch, -.4, .4), -e.h, 0)), _s.set(1, 1, 1)); _m.toArray(C.mesh.instanceMatrix.array, nc * 16); C.mesh.instanceColor.array.set(e.col, nc * 3); nc++;
     } else {
@@ -95,5 +99,6 @@ function updateTraffic(dt) {
       _m.compose(_p.set(x - OX, y + hop * .2 * e.size, z - OZ), _q.setFromEuler(T_.eul.set(.06, -e.h, Math.sin(e.ph) * .09)), _s.set(e.size, e.size * (1 + (hop - .5) * .12), e.size)); _m.toArray(D.mesh.instanceMatrix.array, np * 16); D.mesh.instanceColor.array.set(e.col, np * 3); np++;
     }
   }
+  if (kw) for (const [K, n] of [[kw, nw], [kt, nt]]) { K.mesh.count = n; K.mesh.instanceMatrix.needsUpdate = true; K.mesh.instanceColor.needsUpdate = true; }
   C.mesh.count = nc; D.mesh.count = np; for (const I of [C, D]) { I.mesh.instanceMatrix.needsUpdate = true; I.mesh.instanceColor.needsUpdate = true; }
 }

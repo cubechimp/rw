@@ -164,7 +164,7 @@ const U = {
   uAmbSky: { value: new T.Vector3(.6, .5, .6) }, uAmbGnd: { value: new T.Vector3(.4, .3, .4) },
   uFogCol: { value: new T.Vector3(1, .7, .4) }, uGlowCol: { value: new T.Vector3(1, .6, .3) },
   uFogDist: { value: 14000 }, uTime: { value: 0 }, uNight: { value: 0 }, uUnder: { value: 0 },
-  uRing: { value: new T.Vector3(0, 0, 1400) },
+  uRing: { value: new T.Vector3(0, 0, 1400) }, uKit: { value: new T.Vector3(0, 0, 0) },
 };
 const GL_COMMON = `
 uniform vec3 uSunDir,uSunCol,uAmbSky,uAmbGnd,uFogCol,uGlowCol;
