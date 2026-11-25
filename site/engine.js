@@ -485,6 +485,7 @@ function buildNear(cx, cz) {
   const x0 = cx * CS, z0 = cz * CS, st = CS / NS, m = NS + 3, w = NS + 1;
   const segs = collectSegs(x0 - SDR - 2 * st, z0 - SDR - 2 * st, x0 + CS + SDR + 2 * st, z0 + CS + SDR + 2 * st);
   const H = new Float32Array(m * m), SD = new Float32Array(m * m); let any = false;
+  const realB = nahaHasReal(cx, cz, true), realT = nahaHasReal(cx, cz, false);      // real buildings / real roads exist here: no generated ones
   for (let j = 0; j < m; j++) for (let i = 0; i < m; i++) {
     const x = x0 + (i - 1) * st, z = z0 + (j - 1) * st, sd = sdFrom(segs, x, z), h = heightFrom(x, z, sd);
     H[j * m + i] = h; SD[j * m + i] = sd; if (h > -15) any = true;
@@ -499,7 +500,7 @@ function buildNear(cx, cz) {
       c = mix3(TC.grass, TC.jungle, clamp(smooth(12, 150, h) * .85 + (vnoise(x / 60, z / 60) - .5) * .5, 0, 1));
       if (n1 > .6 && h < 70) c = mix3(c, TC.field, smooth(.6, .7, n1) * .8);
       if (dens > .12) c = mix3(c, TC.town, smooth(.12, .5, dens) * .6);
-      demAt(x, z); const dw = demW; town[j * w + i] = sd > 30 && slope < .3 && dw < .5 ? dens : 0;
+      demAt(x, z); const dw = demW; town[j * w + i] = sd > 30 && slope < .3 && dw < .5 && !realT ? dens : 0;
       if (dw > 0) c = mix3(c, TC.real, dw * .9);
       c = mix3(c, TC.rock, smooth(.35, .7, slope));
       const sw = 1 - smooth(10, 26 + 26 * vnoise(x / 90, z / 90), sd); if (sw > 0) c = mix3(c, sd < 4 ? TC.wet : TC.sand, sw);
@@ -536,7 +537,7 @@ function buildNear(cx, cz) {
     const slope = Math.abs(bil(H, Math.min(NS, fx + .5), fz) - bil(H, Math.max(0, fx - .5), fz)) / st + Math.abs(bil(H, fx, Math.min(NS, fz + .5)) - bil(H, fx, Math.max(0, fz - .5))) / st;
     const dens = cityDens(x, z), tw = cityTow;
     if (sd < 26) { if (r < .55) put('palm', x, h - .1, z, r2 * 6.28, .8 + r2 * .6, .8 + r * .7, [.9 + r2 * .2, 1, .9 + r * .2]); continue; }
-    if (slope < .22 && r < dens + .012) {
+    if (!realB && slope < .22 && r < dens + .012) {
       const ang = Math.floor(r2 * 4) * Math.PI / 2;
       if (tw && dens > .5 && r2 < dens - .3) { const pc = [[1, .96, .9], [.86, .95, 1], [1, .9, .92], [.93, 1, .93]][Math.floor(hash(gx, gz, 6) * 4)]; put('tower', x, h - .3, z, ang, .8 + r2 * .5, .7 + hash(gx, gz, 8) * 2.2, pc); }
       else put('house', x, h - .2, z, ang, .85 + r2 * .35, .9 + r * .25, [1, .97 + r2 * .03, .93 + r2 * .07]);

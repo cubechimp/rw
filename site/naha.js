@@ -46,6 +46,7 @@ async function loadNaha() {
   } catch (e) { NAHA.idx = null; }
 }
 function nahaMatFor(cx, cz) { const k = Math.floor(cx / 2) + '_' + Math.floor(cz / 2), a = NAHA.tiles.get('naha:' + k), b = NAHA.tiles.get('pref:' + k); return a && a.mat ? a.mat : b && b.mat ? b.mat : null; }
+function nahaHasReal(cx, cz, buildings) { const k = Math.floor(cx / 2) + '_' + Math.floor(cz / 2); for (const s of NAHA.sets) { const e = s.idx[k]; if (e && (!buildings || e[0] > 0)) return true; } return false; }
 function nMesh(g, T_) { const m = new T.Mesh(g, bldMat); m.matrixAutoUpdate = false; m.position.set(T_.tx * NAHA.size - OX, 0, T_.tz * NAHA.size - OZ); m.updateMatrix(); g.computeBoundingSphere(); scene.add(m); return m; }
 function nGeo(B) {
   const g = new T.BufferGeometry(); g.setAttribute('position', new T.Float32BufferAttribute(B.p, 3)); g.setAttribute('normal', new T.Float32BufferAttribute(B.n, 3));
@@ -103,7 +104,7 @@ function buildNahaLod2(t) {
 function dropNahaTile(t) { for (const m of [t.meshA, t.meshB, t.mesh2]) if (m) { scene.remove(m); m.geometry.dispose(); } if (t.tex) t.tex.dispose(); if (t.mat) t.mat.dispose(); if (t.labels) for (const l of t.labels) { scene.remove(l); l.material.map.dispose(); l.material.dispose(); } if (t.pois) for (const q of t.pois) if (q.sp) { scene.remove(q.sp); q.sp.material.map.dispose(); q.sp.material.dispose(); q.sp = null; } }
 function syncNaha() { for (const t of NAHA.tiles.values()) { for (const m of [t.meshA, t.meshB, t.mesh2]) if (m) { m.position.set(t.tx * NAHA.size - OX, 0, t.tz * NAHA.size - OZ); m.updateMatrix(); } if (t.mat) t.mat.uniforms.uRoadRect.value.set(t.tx * NAHA.size - OX, t.tz * NAHA.size - OZ, NAHA.size); } }
 function updateNaha(px, pz, budget) {
-  if (!NAHA.idx) return; const S = NAHA.size, R = U.uRing.value.z + 80, L2 = MOBILE ? 620 : 900; let built = 0;
+  if (!NAHA.idx) return; const S = NAHA.size, R = U.uRing.value.z + 80, L2 = MOBILE ? 620 : 900; let built = 0, poiN = 0;
   for (let tz = Math.floor((pz - R) / S); tz <= Math.floor((pz + R) / S); tz++) for (let tx = Math.floor((px - R) / S); tx <= Math.floor((px + R) / S); tx++) {
     const key = tx + '_' + tz;
     for (const set of NAHA.sets) {
@@ -119,9 +120,9 @@ function updateNaha(px, pz, budget) {
     if (t.state !== 3) continue;
     if (t.pois) for (const q of t.pois) {
       const dd = Math.hypot(q.x - px, q.z - pz);
-      if (dd < 170 && !q.sp) { q.sp = textSprite(q.cat ? [q.name, q.cat] : [q.name], { w: 512, h: q.cat ? 128 : 96, stroke: /restaurant|cafe|food|bar|izakaya|bakery|ramen|soba|sushi/.test(q.cat) ? '#ff4fa3' : '#19c8ff' }); q.y = heightAt(q.x, q.z) + 4.2; scene.add(q.sp); }
-      else if (dd > 260 && q.sp) { scene.remove(q.sp); q.sp.material.map.dispose(); q.sp.material.dispose(); q.sp = null; }
-      if (q.sp) { const s = clamp(dd * .045, 1.1, 7); q.sp.scale.set(s * q.sp.userData.aspect * .5, s * .5, 1); q.sp.position.set(q.x - OX, q.y + s * .2, q.z - OZ); }
+      if (dd < 110 && !q.sp && poiN < 40) { q.sp = textSprite(q.cat ? [q.name, q.cat] : [q.name], { w: 384, h: q.cat ? 96 : 72, stroke: /restaurant|cafe|food|bar|izakaya|bakery|ramen|soba|sushi/.test(q.cat) ? '#ff4fa3' : '#19c8ff' }); q.y = heightAt(q.x, q.z) + 4.2; scene.add(q.sp); }
+      else if (dd > 170 && q.sp) { scene.remove(q.sp); q.sp.material.map.dispose(); q.sp.material.dispose(); q.sp = null; }
+      if (q.sp) { poiN++; const s = clamp(dd * .045, 1.1, 7); q.sp.scale.set(s * q.sp.userData.aspect * .5, s * .5, 1); q.sp.position.set(q.x - OX, q.y + s * .2, q.z - OZ); }
     }
     if (t.labels) for (const l of t.labels) { const w = l.userData.w, dd = Math.hypot(w[0] - px, w[2] - pz); l.visible = dd < 700; if (l.visible) { const s = clamp(dd * .09, 2.4, 60); l.scale.set(s * l.userData.aspect * .45, s * .45, 1); l.position.set(w[0] - OX, w[1] + s * .3, w[2] - OZ); } }
     if (t.l2 && t.m2s === 0 && d < L2) { t.m2s = 1; fetch(t.set + '/m_' + t.key + '.json').then((r) => r.json()).then((m) => { t.m2 = m; t.m2s = 2; }).catch(() => { t.m2s = -1; }); }
