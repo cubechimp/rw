@@ -11,7 +11,6 @@ import geopandas as gpd
 import shapely
 from shapely.geometry import shape
 from shapely.prepared import prep
-from PIL import Image, ImageDraw
 
 OUT = sys.argv[1]; WORK = sys.argv[2] if len(sys.argv) > 2 else 'work'
 os.makedirs(OUT, exist_ok=True); os.makedirs(WORK, exist_ok=True)
@@ -63,11 +62,8 @@ try:
 except Exception as e:
     print('WARNING: could not load the Naha outline, Naha buildings will be duplicated:', e)
 
-tiles = collections.defaultdict(lambda: {'b': [], 'n': 0, 'p': []}); masks = {}
+tiles = collections.defaultdict(lambda: {'b': [], 'n': 0, 'p': [], 'v': []})
 rep = collections.Counter(); per = collections.defaultdict(collections.Counter)
-def mask(k):
-    if k not in masks: masks[k] = Image.new('L', (TILE, TILE), 0)
-    return masks[k]
 
 for region, box in BOXES.items():
     # ---- buildings ----
@@ -94,19 +90,26 @@ for region, box in BOXES.items():
         del df
     except Exception as e:
         print('ERROR buildings', region, repr(e)); rep['errors'] += 1
-    # ---- roads ----
+    # ---- roads (kept as lines; the game paints them onto the ground) ----
     try:
         df = fetch('segment', region, box); print(region, 'segments', len(df), flush=True)
         for _, row in df.iterrows():
             if get(row, 'subtype') not in (None, 'road'): continue
             w = ROAD_W.get(get(row, 'class') or '', 5)
             for ln in lines(row.geometry):
-                c = np.asarray(proj(ln).coords)
-                if len(c) < 2: continue
-                rep['road_km'] += float(np.hypot(np.diff(c[:, 0]), np.diff(c[:, 1])).sum()) / 1000
-                for tx in range(int((c[:, 0].min() - w) // TILE), int((c[:, 0].max() + w) // TILE) + 1):
-                    for tz in range(int((c[:, 1].min() - w) // TILE), int((c[:, 1].max() + w) // TILE) + 1):
-                        ImageDraw.Draw(mask((tx, tz))).line([(float(x - tx * TILE), float(y - tz * TILE)) for x, y in c], fill=255, width=max(2, int(round(w))))
+                ln = proj(ln).simplify(1.0)
+                if ln.is_empty or ln.length < 2: continue
+                rep['road_km'] += ln.length / 1000
+                x0, z0, x1, z1 = ln.bounds
+                for tx in range(int((x0 - w) // TILE), int((x1 + w) // TILE) + 1):
+                    for tz in range(int((z0 - w) // TILE), int((z1 + w) // TILE) + 1):
+                        piece = ln.intersection(shapely.box(tx * TILE - w - 2, tz * TILE - w - 2, (tx + 1) * TILE + w + 2, (tz + 1) * TILE + w + 2))
+                        for part in lines(piece):
+                            q = np.round((np.asarray(part.coords) - [tx * TILE, tz * TILE]) * 2).astype(int)
+                            keep = np.ones(len(q), bool); keep[1:] = np.any(q[1:] != q[:-1], axis=1); q = q[keep]
+                            if len(q) < 2: continue
+                            d = np.vstack([q[:1], np.diff(q, axis=0)])
+                            tiles[(tx, tz)]['v'] += [int(round(w)), len(q)] + d.flatten().tolist()
         del df
     except Exception as e:
         print('ERROR roads', region, repr(e)); rep['errors'] += 1
@@ -128,22 +131,18 @@ for region, box in BOXES.items():
     except Exception as e:
         print('ERROR places', region, repr(e)); rep['errors'] += 1
 
-def rle(a):
-    f = (a.reshape(-1) > 127).astype(np.int8); ch = np.flatnonzero(np.diff(f)) + 1
-    runs = np.diff(np.concatenate([[0], ch, [f.size]])).tolist()
-    return ([0] if f[0] else []) + runs
-index = {}; size = 0
-for k in set(tiles) | set(masks):
-    T = tiles.get(k, {'b': [], 'n': 0, 'p': []}); m = masks.get(k); rd = None
-    if m is not None:
-        a = np.asarray(m)
-        if a.any(): rd = rle(a)
-    if not T['n'] and not T['p'] and rd is None: continue
-    s = json.dumps({'b': T['b'], 'r': rd, 'p': T['p']}, separators=(',', ':'), ensure_ascii=False)
-    open(f'{OUT}/t_{k[0]}_{k[1]}.json', 'w', encoding='utf-8').write(s); size += len(s.encode()); index['%d_%d' % k] = [T['n'], 0]
-report = dict(rep); report['tiles'] = len(index); report['megabytes'] = round(size / 1e6, 1); report['regions'] = {r: dict(c) for r, c in per.items()}
+GROUP = 12                      # tiles are shipped in bundles of 12 x 12 (about 9 km) to keep the file count low
+bundles = collections.defaultdict(dict); index = {}
+for k, T in tiles.items():
+    if not T['n'] and not T['p'] and not T['v']: continue
+    bundles[(k[0] // GROUP, k[1] // GROUP)]['%d_%d' % k] = {'b': T['b'], 'v': T['v'], 'p': T['p']}; index['%d_%d' % k] = [T['n'], 0]
+size = 0
+for bk, B in bundles.items():
+    s = json.dumps(B, separators=(',', ':'), ensure_ascii=False)
+    open(f'{OUT}/b_{bk[0]}_{bk[1]}.json', 'w', encoding='utf-8').write(s); size += len(s.encode())
+report = dict(rep); report['tiles'] = len(index); report['bundles'] = len(bundles); report['megabytes'] = round(size / 1e6, 1); report['regions'] = {r: dict(c) for r, c in per.items()}
 report['road_km'] = round(report.get('road_km', 0))
-json.dump({'tile': TILE, 'tiles': index, 'report': report}, open(f'{OUT}/index.json', 'w'), separators=(',', ':'))
+json.dump({'tile': TILE, 'group': GROUP, 'tiles': index, 'report': report}, open(f'{OUT}/index.json', 'w'), separators=(',', ':'))
 json.dump(report, open(f'{OUT}/report.json', 'w'), indent=1)
 print(json.dumps(report, indent=1))
 if not report.get('buildings'): sys.exit('no buildings were produced')

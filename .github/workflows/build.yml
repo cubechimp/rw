@@ -24,7 +24,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install map tools
-        run: pip install overturemaps geopandas pyarrow shapely numpy pillow
+        run: pip install overturemaps geopandas pyarrow shapely numpy
       - name: Build prefecture buildings, roads and places (Overture Maps)
         id: pref
         continue-on-error: true
