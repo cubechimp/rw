@@ -10,7 +10,7 @@ const CRAFT_INFO = {
 function islanderParts(shirt) {      // head, body, hands and feet float apart, all glossy like Ryukyu glass
   const dark = 0x1b2a4a, s = (r, hexc, o) => part(gSph(r, 14, 10), hexc, o);
   return {
-    torso: merge([s(.34, shirt, { s: [1, 1.12, .92] }), s(.21, shirt, { p: [0, .3, 0] })]),
+    torso: merge([s(.34, shirt, { s: [1, 1.12, .92] })]),
     head: merge([s(.4, shirt, { s: [1.06, .96, 1] }), s(.07, dark, { p: [-.15, .03, -.35], s: [.8, 1.35, .5] }), s(.07, dark, { p: [.15, .03, -.35], s: [.8, 1.35, .5] }),
       s(.025, 0xffffff, { p: [-.13, .07, -.39], glow: 1 }), s(.025, 0xffffff, { p: [.17, .07, -.39], glow: 1 }),
       s(.06, 0xff9db0, { p: [-.26, -.1, -.3], s: [1, .6, .5] }), s(.06, 0xff9db0, { p: [.26, -.1, -.3], s: [1, .6, .5] }),
@@ -50,19 +50,28 @@ function supGeo(accent) {
     part(gCyl(.03, .03, 2.1, 5), 0x24304a, { p: [.42, 1.0, -.25], r: [.25, 0, -.1] }), part(gBox(.2, .44, .04), accent, { p: [.5, .02, -.5], r: [.25, 0, -.1] }),
   ]);
 }
+function planeGeo(accent) {      // a small seaplane on floats
+  const w = 0xffffff, dark = 0x24304a;
+  return merge([part(gSph(1, 12, 8), w, { p: [0, .95, .1], s: [.55, .52, 2.2] }), part(gSph(1, 10, 6), accent, { p: [0, .95, -1.75], s: [.4, .4, .5] }),
+    part(gBox(6.6, .1, 1.15), accent, { p: [0, 1.5, -.25] }), part(gBox(6.6, .04, .3), w, { p: [0, 1.56, -.25] }), part(gBox(.08, .95, .7), accent, { p: [0, 1.6, 2.0] }), part(gBox(2.3, .08, .6), w, { p: [0, 1.15, 2.0] }),
+    part(gSph(1, 8, 6), w, { p: [-1.15, .22, -.1], s: [.26, .24, 1.6] }), part(gSph(1, 8, 6), w, { p: [1.15, .22, -.1], s: [.26, .24, 1.6] }),
+    part(gBox(.07, .8, .07), dark, { p: [-1.15, .7, -.4] }), part(gBox(.07, .8, .07), dark, { p: [1.15, .7, -.4] }), part(gBox(.07, .8, .07), dark, { p: [-1.15, .7, .5] }), part(gBox(.07, .8, .07), dark, { p: [1.15, .7, .5] })]);
+}
 function makeIslander(colorIdx) {
   const shirt = DATA.shirts[colorIdx % DATA.shirts.length], g = new T.Group(), G = islanderParts(shirt), parts = {};
   for (const [n, geo] of [['torso', G.torso], ['head', G.head], ['handL', G.hand], ['handR', G.hand], ['footL', G.foot], ['footR', G.foot]]) { const m = new T.Mesh(geo, glassMat); m.frustumCulled = false; g.add(m); parts[n] = m; }
-  const rides = { jetski: new T.Mesh(jetskiGeo(shirt), objMat), sabani: new T.Mesh(sabaniGeo(), objMat), sup: new T.Mesh(supGeo(shirt), objMat), bike: new T.Mesh(bikeGeo(shirt), objMat) };
+  const rides = { jetski: new T.Mesh(jetskiGeo(shirt), objMat), sabani: new T.Mesh(sabaniGeo(), objMat), sup: new T.Mesh(supGeo(shirt), objMat), bike: new T.Mesh(bikeGeo(shirt), objMat), plane: new T.Mesh(planeGeo(shirt), objMat) };
+  const prop = new T.Mesh(merge([part(gBox(1.9, .16, .05), 0x24304a), part(gBox(.16, 1.9, .05), 0x24304a)]), objMat); prop.position.set(0, .95, -2.28); prop.frustumCulled = false; rides.plane.add(prop); rides.plane.userData.prop = prop;
   for (const k in rides) { rides[k].visible = false; rides[k].frustumCulled = false; g.add(rides[k]); }
   g.userData = { parts, rides, a: { ph: 0 } }; scene.add(g); return g;
 }
 function poseIslander(g, mode, craft, diving, t, speed, opt) {
   const u = g.userData, p = u.parts, a = u.a, dt = (opt && opt.dt) || .016, biking = !!(opt && opt.biking) && mode === 'land', air = !!(opt && opt.air);
-  for (const k of CRAFTS) u.rides[k].visible = mode === 'sea' && k === craft && !diving; u.rides.bike.visible = biking;
+  for (const k of CRAFTS) u.rides[k].visible = mode === 'sea' && k === craft && !diving; u.rides.bike.visible = biking; u.rides.plane.visible = mode === 'air'; if (mode === 'air') u.rides.plane.userData.prop.rotation.z = t * 38;
   const br = Math.sin(t * 2.2) * .025; let by = .72, bz = 0, hy = 1.44, hz = 0, sy = 1, tilt = 0;
   let hl = [-.52, .78, 0], hr = [.52, .78, 0], fl = [-.2, .12, 0], fr = [.2, .12, 0];
-  if (diving) {      // swimming flat, kicking
+  if (mode === 'air') { by = 1.5 + br; bz = .35; hy = by + .7; hz = bz - .04; hl = [-.3, 1.55, -.2]; hr = [.3, 1.55, -.2]; fl = [-.2, 1.1, .1]; fr = [.2, 1.1, .1]; }
+  else if (diving) {      // swimming flat, kicking
     const k = Math.sin(t * 7); by = -.35; hy = -.3; hz = -.62; hl = [-.5 - Math.abs(k) * .1, -.35, -.25 + k * .3]; hr = [.5 + Math.abs(k) * .1, -.35, -.25 - k * .3]; fl = [-.16, -.35 + k * .14, .7]; fr = [.16, -.35 - k * .14, .7];
   } else if (mode === 'sea' || biking) {
     const seat = biking ? [1.2, .28] : craft === 'jetski' ? [.98, .45] : craft === 'sabani' ? [.8, 1.2] : [.86, .1];
@@ -227,7 +236,7 @@ function upsertRemote(id, s) {
     r = { g: makeIslander(s.c), label: textSprite([nickOf(s.n)], { w: 384, h: 96, stroke: '#8fe01f' }), color: s.c, nk: s.nk, x: s.x, z: s.z, y: s.y, h: s.h, bubble: null, et: 0 };
     scene.add(r.label); remotes.set(id, r);
   }
-  r.tx = s.x; r.tz = s.z; r.ty = s.y; r.th = s.h; r.mode = s.m === 0 || s.m === 4 ? 'land' : 'sea'; r.biking = s.m === 4; r.craft = CRAFTS[clamp(s.m - 1, 0, 2)] || 'jetski'; r.diving = !!s.d; r.name = nickOf(s.n);
+  r.tx = s.x; r.tz = s.z; r.ty = s.y; r.th = s.h; r.mode = s.m === 5 ? 'air' : s.m === 0 || s.m === 4 ? 'land' : 'sea'; r.biking = s.m === 4; r.craft = CRAFTS[clamp(s.m - 1, 0, 2)] || 'jetski'; r.diving = !!s.d; r.name = nickOf(s.n);
   if (s.et && s.et !== r.et) { r.et = s.et; if (r.bubble) scene.remove(r.bubble); r.bubble = textSprite([EMOTES[s.e] || EMOTES[0]], { w: 384, h: 110, stroke: '#ff4fa3' }); r.bubbleT = 4; scene.add(r.bubble); }
   return r;
 }

@@ -69,7 +69,7 @@ addEventListener('keydown', (e) => {
   if (e.code === 'Escape' && modalOpen) closeModal();
   if (modalOpen) return;
   if (e.code === 'KeyE') doAction(); if (e.code === 'KeyM') openMap(); if (e.code === 'KeyP') openPassport(); if (e.code === 'Space') { e.preventDefault(); jump(); }
-  if (e.code === 'KeyB') toggleBike();
+  if (e.code === 'KeyB') toggleBike(); if (e.code === 'KeyF') toggleFly();
   if (e.code === 'Digit1') setCraft('jetski'); if (e.code === 'Digit2') setCraft('sabani'); if (e.code === 'Digit3') setCraft('sup');
 });
 addEventListener('keyup', (e) => { keys[e.code] = false; });
@@ -88,7 +88,7 @@ addEventListener('blur', () => { for (const k in keys) keys[k] = false; inp.boos
   canvas.addEventListener('wheel', (e) => { cam.dist = clamp(cam.dist + e.deltaY * .01, 5, 40); }, { passive: true });
   const bb = $('#bBoost'); bb.addEventListener('pointerdown', (e) => { inp.boost = true; bb.classList.add('on'); bb.setPointerCapture(e.pointerId); });
   for (const ev of ['pointerup', 'pointercancel']) bb.addEventListener(ev, () => { inp.boost = false; bb.classList.remove('on'); });
-  $('#bJump').addEventListener('click', jump); $('#bBike').addEventListener('click', toggleBike);
+  $('#bJump').addEventListener('click', jump); $('#bBike').addEventListener('click', toggleBike); $('#bFly').addEventListener('click', toggleFly);
   $('#style').addEventListener('click', () => { S.gba = !S.gba; applyStyle(); save(); }); $('#act').addEventListener('click', doAction);
   $('#bMap').addEventListener('click', openMap); $('#bBook').addEventListener('click', openPassport);
   $('#bSky').addEventListener('click', () => { moodAuto = false; moodT = (Math.floor(moodT) + 1) % 3; const m = MOODS[Math.floor(moodT)]; toast(m.name, m.jp); });
@@ -103,6 +103,27 @@ function setCraft(c, quiet) {
   if (started && !quiet) toast(CRAFT_INFO[c].label, c === 'sabani' ? 'A traditional Okinawan fishing canoe under sail.' : c === 'sup' ? 'Slow down. Listen to the lagoon.' : 'Hold Boost to fly across the bay.');
 }
 function toggleBike() { P.bike = S.bike = !P.bike; $('#bBike').classList.toggle('sel', P.bike); if (started) toast(P.bike ? 'Bicycle' : 'On foot', P.bike ? 'As fast on land as the jet ski on water.' : 'Bouncy walking.'); save(); }
+function toggleFly() {
+  if (!started || modalOpen || chill || P.diving) return;
+  if (!P.fly) { P.fly = true; P.landing = false; P.vy = 12; P.y += 2; P.speed = Math.max(P.speed, 32); P.air = false; P.jy = 0; toast('Seaplane', 'Stick up to climb, down to descend. Touch down gently to land, on sea or land.'); }
+  else { P.landing = !P.landing; toast(P.landing ? 'Coming in to land' : 'Climbing again', ''); }
+  $('#bFly').classList.toggle('sel', P.fly);
+}
+function flyStep(dt, ix, iy) {
+  const boosting = inp.boost || keys.ShiftLeft || keys.ShiftRight; P.speed += clamp((boosting ? 120 : 62) - P.speed, -30 * dt, 26 * dt);
+  P.bank = lerp(P.bank || 0, clamp(ix, -1, 1), dt * 3); P.h += P.bank * 1.05 * dt; P.vy = lerp(P.vy, P.landing ? -22 : clamp(iy, -1, 1) * 24, dt * 2.5);
+  const nx = clamp(P.x + Math.sin(P.h) * P.speed * dt, -498000, 365000), nz = clamp(P.z - Math.cos(P.h) * P.speed * dt, -190000, 242000), gh = heightAt(nx, nz), floor = Math.max(gh, 0);
+  let y = P.y + P.vy * dt;
+  if (nahaBlocked(nx, nz, y - 1)) { y = P.y + 14 * dt; P.vy = 14; }      // too low over a roof: pull up
+  if (y <= floor + 1.3 && P.vy < 0 && (P.landing || iy < -.3)) {
+    P.fly = false; P.landing = false; P.mode = gh > .3 ? 'land' : 'sea'; P.speed = Math.min(P.speed, 22); P.vy = 0; y = floor; $('#bFly').classList.remove('sel');
+    if (P.mode === 'sea') { splash(nx - OX, nz - OZ, 26, 6); splashSfx(.3); } toast('Landed', P.mode === 'sea' ? 'Back on the water.' : 'Back on land.');
+  } else y = clamp(y, floor + 1.7, 1800);
+  P.x = nx; P.z = nz; P.gh = gh; P.y = y;
+  me.position.set(P.x - OX, P.y, P.z - OZ); me.rotation.order = 'YXZ'; me.rotation.set(clamp(P.vy / 70, -.45, .45), -P.h, -P.bank * .7);
+  poseIslander(me, P.fly ? 'air' : P.mode, P.craft, false, tNow, P.speed, { dt });
+  if (engineGain) { engineGain.gain.value = lerp(engineGain.gain.value, S.muted ? 0 : .05, .1); engineOsc.frequency.value = 70 + P.speed * .7; }
+}
 function inspectAt(x, y) { const r = nahaPick(x, y); if (r) toast(r.title, r.text); }
 function applyStyle() { document.body.classList.toggle('gba', S.gba !== false); $('#style').textContent = 'Menu style: ' + (S.gba !== false ? 'Pixel' : 'Aero'); }
 function sayEmote(i) {
@@ -114,6 +135,7 @@ function jump() { if (!started || modalOpen || P.air || P.diving) return; P.air 
 /* ---------------- player ---------------- */
 function nearestPlace(onlyNew) { let best = null; for (const p of PLACES) { if (onlyNew && S.stamps[p.id]) continue; if (!best || p.dist < best.dist) best = p; } return best; }
 function currentAction() {
+  if (P.fly) return { label: P.landing ? 'Climb again' : 'Land the plane', fn: toggleFly };
   if (P.diving) return { label: 'Surface', fn: () => { P.diving = false; turtle.visible = false; splash(P.x - OX, P.z - OZ, 14, 3); splashSfx(.2); } };
   const p = nearestPlace(false); if (p && p.dist < 70) return { label: 'Visit ' + p.en, fn: () => openPlace(p) };
   if (P.mode === 'sea' && P.gh < -1.3 && P.speed < 6) return { label: 'Snorkel here', fn: startDive };
@@ -129,6 +151,7 @@ function updatePlayer(dt) {
   let ix = inp.jx, iy = inp.jy;
   if (keys.KeyA || keys.ArrowLeft) ix -= 1; if (keys.KeyD || keys.ArrowRight) ix += 1; if (keys.KeyW || keys.ArrowUp) iy += 1; if (keys.KeyS || keys.ArrowDown) iy -= 1;
   if (modalOpen || chill) ix = iy = 0;
+  if (P.fly) { flyStep(dt, ix, iy); return; }
   const mag = Math.min(1, Math.hypot(ix, iy)), sea = P.mode === 'sea', ci = CRAFT_INFO[P.craft];
   const biking = !sea && P.bike && !chill;
   let maxS = P.diving ? 3.2 : sea ? ci.max : biking ? 26 : 7.5, turn = P.diving ? 5 : sea ? ci.turn : biking ? 3.4 : 10, acc = P.diving ? 6 : sea ? ci.acc : biking ? 16 : 30;
@@ -143,6 +166,10 @@ function updatePlayer(dt) {
   P.speed += clamp(mag * maxS - P.speed, -acc * dt * 1.6, acc * dt);
   let nx = P.x + Math.sin(P.h) * P.speed * dt, nz = P.z - Math.cos(P.h) * P.speed * dt;
   nx = clamp(nx, -498000, 365000); nz = clamp(nz, -190000, 242000);
+  if (!P.diving && nahaBlocked(nx, nz, P.y + .5) && !nahaBlocked(P.x, P.z, P.y + .5)) {      // buildings are solid: slide along the wall
+    if (!nahaBlocked(nx, P.z, P.y + .5)) nz = P.z; else if (!nahaBlocked(P.x, nz, P.y + .5)) nx = P.x; else { nx = P.x; nz = P.z; }
+    P.speed *= Math.max(0, 1 - dt * 5);
+  }
   let gh = heightAt(nx, nz);
   if (sea) {
     if (P.diving) { if (gh > -1.0) { nx = P.x; nz = P.z; gh = P.gh; P.speed = 0; } }
@@ -193,7 +220,7 @@ function updateCamera(dt) {
   if (!started) { cam.yaw = P.h + Math.sin(tNow * .12) * .7; cam.pitch = .2; cam.dist = 13; }
   else if (chill) { cam.yaw = lerp(cam.yaw, -Math.PI / 2 + Math.sin(tNow * .1) * .25, dt); cam.pitch = lerp(cam.pitch, .08, dt); cam.dist = lerp(cam.dist, 7, dt); }
   else if (moving && tNow - cam.lastDrag > 2.2) { let d = P.h - cam.yaw; d = Math.atan2(Math.sin(d), Math.cos(d)); cam.yaw += d * Math.min(1, dt * 1.6); }
-  const dist = P.diving ? Math.min(cam.dist, 5.5) : cam.dist + (started ? P.speed * .13 : 0), pitch = P.diving ? Math.min(cam.pitch, .12) : cam.pitch;
+  const dist = P.diving ? Math.min(cam.dist, 5.5) : P.fly ? cam.dist + 9 + P.speed * .05 : cam.dist + (started ? P.speed * .13 : 0), pitch = P.diving ? Math.min(cam.pitch, .12) : cam.pitch;
   const tx = P.x - OX, ty = P.y + (P.diving ? .4 : 2.1), tz = P.z - OZ, cp = Math.cos(pitch);
   let cx = tx - Math.sin(cam.yaw) * dist * cp, cz = tz + Math.cos(cam.yaw) * dist * cp, cy = ty + dist * Math.sin(pitch) + .4;
   const g = heightAt(cx + OX, cz + OZ);
@@ -208,7 +235,7 @@ function rebase(x, z) {
   planChunks(x, z); pumpChunks(1e9); rebuildInstances(); syncNaha();
   for (let i = 0; i < PN; i++) pLife[i] = 0;
 }
-function setPos(x, z) { P.x = x; P.z = z; P.speed = 0; P.diving = false; P.air = false; P.jy = 0; turtle.visible = false; const h = heightAt(x, z); P.gh = h; P.mode = h > .3 ? 'land' : 'sea'; P.y = Math.max(h, 0); rebase(x, z); }
+function setPos(x, z) { P.fly = false; P.landing = false; $('#bFly').classList.remove('sel'); P.x = x; P.z = z; P.speed = 0; P.diving = false; P.air = false; P.jy = 0; turtle.visible = false; const h = heightAt(x, z); P.gh = h; P.mode = h > .3 ? 'land' : 'sea'; P.y = Math.max(h, 0); rebase(x, z); }
 function travelTo(x, z, label) {
   closeModal(); const f = $('#fade'); f.textContent = label; f.classList.add('on');
   setTimeout(() => { setPos(x, z); cam.yaw = P.h; save(); setTimeout(() => f.classList.remove('on'), 150); }, 520);
@@ -292,7 +319,7 @@ function updateHud(dt) {
   if (hudT > 0) return; hudT = .25;
   let code = ''; for (const r of muniRings) { if (P.x < r.bb[0] || P.x > r.bb[2] || P.z < r.bb[1] || P.z > r.bb[3]) continue; if (inRing(r, P.x, P.z)) { code = r.code; break; } }
   const ll = xz2ll(P.x, P.z), loc = $('#loc'), m = DATA.muni[code];
-  loc.firstChild.textContent = m ? m[1] + ' ' + m[0] : 'On the water 海上'; loc.lastChild.textContent = ll[1].toFixed(4) + '°N  ' + ll[0].toFixed(4) + '°E';
+  loc.firstChild.textContent = m ? m[1] + ' ' + m[0] : 'On the water 海上'; loc.lastChild.textContent = P.fly ? 'Altitude ' + Math.round(P.y) + ' m · ' + Math.round(P.speed * 3.6) + ' km/h' : ll[1].toFixed(4) + '°N  ' + ll[0].toFixed(4) + '°E';
   if (code !== curMuni) { curMuni = code; }
   const tp = nearestPlace(true) || nearestPlace(false), tg = $('#target');
   if (tp) { const br = Math.atan2(tp.x - P.x, -(tp.z - P.z)) - cam.yaw; tg.firstChild.style.transform = `rotate(${br}rad)`; tg.lastChild.textContent = tp.en + ' · ' + fmtDist(tp.dist); }
@@ -313,7 +340,7 @@ let lastSent = '';
 function readPeer(pr) {
   const s = pr.presence || {}, num = (v) => typeof v === 'number' && isFinite(v); if (!num(s.x) || !num(s.z)) return null;
   const n = Array.isArray(s.n) ? [s.n[0] | 0, s.n[1] | 0] : [0, 0], c = num(s.c) ? clamp(Math.round(s.c), 0, 7) : 0;
-  return { x: clamp(s.x, -6e5, 6e5), z: clamp(s.z, -6e5, 6e5), y: num(s.y) ? clamp(s.y, -10, 600) : 0, h: num(s.h) ? s.h : 0, m: num(s.m) ? clamp(Math.round(s.m), 0, 4) : 0, d: s.d ? 1 : 0, n, c, e: num(s.e) ? clamp(Math.round(s.e), 0, 2) : 0, et: num(s.et) ? s.et : 0, nk: n.join('_') + '_' + c };
+  return { x: clamp(s.x, -6e5, 6e5), z: clamp(s.z, -6e5, 6e5), y: num(s.y) ? clamp(s.y, -10, 600) : 0, h: num(s.h) ? s.h : 0, m: num(s.m) ? clamp(Math.round(s.m), 0, 5) : 0, d: s.d ? 1 : 0, n, c, e: num(s.e) ? clamp(Math.round(s.e), 0, 2) : 0, et: num(s.et) ? s.et : 0, nk: n.join('_') + '_' + c };
 }
 async function initRoom() {
   let room = null; try { room = window.claude && window.claude.use ? await window.claude.use('room') : null; } catch (e) { room = null; }
@@ -328,7 +355,7 @@ async function initRoom() {
   } catch (e) { ROOM = null; return; }
   setInterval(() => {
     if (!ROOM || !started) return;
-    const st = { x: Math.round(P.x * 10) / 10, z: Math.round(P.z * 10) / 10, y: Math.round(P.y * 10) / 10, h: Math.round(P.h * 100) / 100, m: P.mode === 'land' ? (P.bike ? 4 : 0) : CRAFTS.indexOf(P.craft) + 1, d: P.diving ? 1 : 0, n: S.name, c: S.color, e: P.emote, et: P.emoteT };
+    const st = { x: Math.round(P.x * 10) / 10, z: Math.round(P.z * 10) / 10, y: Math.round(P.y * 10) / 10, h: Math.round(P.h * 100) / 100, m: P.fly ? 5 : P.mode === 'land' ? (P.bike ? 4 : 0) : CRAFTS.indexOf(P.craft) + 1, d: P.diving ? 1 : 0, n: S.name, c: S.color, e: P.emote, et: P.emoteT };
     const js = JSON.stringify(st); if (js === lastSent) return; lastSent = js; ROOM.presence(st).catch(() => {});
   }, 150);
 }
@@ -382,7 +409,7 @@ async function boot(data) {
   applyMood(false); requestAnimationFrame(frame);
   const go = $('#go'); go.disabled = false; go.textContent = 'Haisai! Dive in';
   initRoom(); setInterval(() => { if (started) save(); }, 6000);
-  window.__rw = { P, S, cam, renderer, NAHA, nahaReady, nahaPick, toggleBike, INST, startDive, setMood: (m) => { moodAuto = false; moodT = m; }, travelTo, setPos, openPlace, openMap, openPassport, PLACES, get frames() { return frameCount; } };
+  window.__rw = { P, S, cam, renderer, NAHA, nahaReady, nahaPick, nahaBlocked, toggleBike, toggleFly, INST, startDive, setMood: (m) => { moodAuto = false; moodT = m; }, travelTo, setPos, openPlace, openMap, openPassport, PLACES, get frames() { return frameCount; } };
 }
 const HOT = window.claude && window.claude.hot;
 if (HOT && HOT.snapshot) HOT.snapshot(() => JSON.parse(JSON.stringify(S)));

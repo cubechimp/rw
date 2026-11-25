@@ -222,8 +222,8 @@ const glassMat = new T.ShaderMaterial({
   fragmentShader: `varying vec3 vCol,vN,vW;varying float vGlow;${GL_COMMON}
     void main(){vec3 n=normalize(vN);vec3 V=normalize(cameraPosition-vW);float nv=max(dot(n,V),0.);float hemi=n.y*.5+.5;
       vec3 base=vCol*(.5+.55*hemi)*(mix(uAmbGnd,uAmbSky,hemi)+uSunCol*.35*max(dot(n,uSunDir),0.)+.28);
-      vec3 col=mix(base,vec3(1.),pow(1.-nv,2.2)*.6)+vCol*.22*pow(nv,3.);
-      col+=pow(max(dot(n,normalize(V+normalize(vec3(-.35,.8,.3)))),0.),70.)*.95+pow(max(dot(n,normalize(V+uSunDir)),0.),28.)*uSunCol*.35;
+      vec3 col=mix(base,vec3(1.),pow(1.-nv,2.2)*.3)+vCol*.11*pow(nv,3.);
+      col+=pow(max(dot(n,normalize(V+normalize(vec3(-.35,.8,.3)))),0.),70.)*.47+pow(max(dot(n,normalize(V+uSunDir)),0.),28.)*uSunCol*.17;
       col+=vCol*vGlow*(.5+uNight*1.3);
       gl_FragColor=vec4(fogged(col,vW),1.);}`,
 });
@@ -376,7 +376,7 @@ const MOODS = [
   { name: 'Neon dusk', jp: '宵', zen: 0x08093a, mid: 0x47228f, hor: 0xff4f9b, cloud: 0x6d3aa8, glow: 0xff3f9a, discA: 0xff8ac0, discB: 0xff2f8a,
     el: -.085, size: .105, stripe: 1, amb: [.34, .34, .62], gnd: [.26, .22, .40], sun: [.30, .22, .46], shallow: 0x22cfe0, deep: 0x0c1558, night: 1, fog: 11000 },
 ];
-let moodT = 1.0, moodAuto = true;
+let moodT = 0.0, moodAuto = true;      // start at bright resort noon
 const _ca = [0, 0, 0];
 function mixHex(a, b, t, out) { const x = hex3(a), y = hex3(b); out.set(lerp(x[0], y[0], t), lerp(x[1], y[1], t), lerp(x[2], y[2], t)); }
 function applyMood(under) {
@@ -546,7 +546,7 @@ function buildNear(cx, cz) {
     if (dens > .45) continue;
     if (sd < 70 && r < .3) { put('palm', x, h - .1, z, r2 * 6.28, .9 + r2 * .6, .9 + r * .8, [1, 1, 1]); continue; }
     const jungle = smooth(15, 140, h);
-    if (r < (.1 + jungle * .3) * keep) { const s = 1.5 + r2 * 1.4; put('tree', x, h - .3, z, r2 * 6.28, s, s * (.85 + r * .5), [.85 + r2 * .25, .9 + r * .2, .85]); }
+    if (r < (.2 + jungle * .3) * keep) { const s = 1.5 + r2 * 1.4; put('tree', x, h - .3, z, r2 * 6.28, s, s * (.85 + r * .5), [.85 + r2 * .25, .9 + r * .2, .85]); }
   }
   return ch;
 }
