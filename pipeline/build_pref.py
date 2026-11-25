@@ -42,6 +42,28 @@ def primary(v):
         return v.get('primary') if isinstance(v, dict) else None
     except Exception:
         return None
+def first(v):
+    """first usable string of a list-like column (phones, websites)"""
+    try:
+        if v is None or isinstance(v, str): return (v or '')[:24]
+        for q in list(v):
+            if q: return str(q)[:24]
+    except Exception:
+        pass
+    return ''
+def address(v):
+    """one line from the first Overture address record: street part, town, postcode"""
+    try:
+        if v is None: return ''
+        a = list(v)[0]
+        g = lambda k: (a.get(k) if hasattr(a, 'get') else None) or ''
+        free, loc, post = str(g('freeform')).strip(), str(g('locality')).strip(), str(g('postcode')).strip()
+        out = free
+        if loc and loc not in free: out = (loc + ' ' + free).strip()
+        if post and post not in out: out = (out + ' \u3012' + post).strip()
+        return out[:70]
+    except Exception:
+        return ''
 def polys(g):
     if g is None or g.is_empty: return []
     if g.geom_type == 'Polygon': return [g]
@@ -125,7 +147,10 @@ for region, box in BOXES.items():
             g = row.geometry
             if g is None or g.geom_type != 'Point': continue
             x, z = tm([g.x], [g.y]); key = (int(math.floor(x[0] / TILE)), int(math.floor(z[0] / TILE)))
-            tiles[key]['p'].append([int(round(x[0])), int(round(z[0])), str(name)[:40], str(cat)[:32]])
+            addr, phone = address(get(row, 'addresses')), first(get(row, 'phones'))
+            if addr: rep['places_with_address'] += 1
+            if phone: rep['places_with_phone'] += 1
+            tiles[key]['p'].append([int(round(x[0])), int(round(z[0])), str(name)[:40], str(cat)[:32], addr, phone])
             rep['places'] += 1; per[region]['places'] += 1
         del df
     except Exception as e:
