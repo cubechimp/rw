@@ -157,7 +157,7 @@ function dropNahaTile(t) { for (const m of [t.meshA, t.meshB, t.mesh2]) if (m) {
 function syncNaha() { for (const t of NAHA.tiles.values()) { for (const m of [t.meshA, t.meshB, t.mesh2]) if (m) { m.position.set(t.tx * NAHA.size - OX, 0, t.tz * NAHA.size - OZ); m.updateMatrix(); } if (t.mat) t.mat.uniforms.uRoadRect.value.set(t.tx * NAHA.size - OX, t.tz * NAHA.size - OZ, NAHA.size); } NAHA.poiT = 0; }
 function dropPoi(q) { if (q.sp) { scene.remove(q.sp); q.sp.material.map.dispose(); q.sp.material.dispose(); q.sp = null; } }
 function updateNaha(px, pz, budget) {
-  if (!NAHA.idx) return; const S = NAHA.size, R = U.uRing.value.z + 80, L2 = MOBILE ? 620 : 900; let built = 0;
+  if (!NAHA.idx) return; const S = NAHA.size, R = U.uRing.value.z + 80, L2 = MOBILE ? 300 : 420; let built = 0;
   for (let tz = Math.floor((pz - R) / S); tz <= Math.floor((pz + R) / S); tz++) for (let tx = Math.floor((px - R) / S); tx <= Math.floor((px + R) / S); tx++) {
     const key = tx + '_' + tz;
     for (const set of NAHA.sets) {
@@ -177,9 +177,9 @@ function updateNaha(px, pz, budget) {
     const show2 = !!t.mesh2 && d < L2 + (t.show2 ? 150 : 0); t.show2 = show2; if (t.mesh2) t.mesh2.visible = show2; if (t.meshB) t.meshB.visible = !show2;
   }
   // business labels: the nearest ones get a sign, re-chosen a few times a second
-  const PR = MOBILE ? 200 : 320, PN_ = MOBILE ? 70 : 160;
+  const PR = MOBILE ? 150 : 210, PN_ = MOBILE ? 60 : 120;
   if (!(NAHA.poiT-- > 0)) {
-    NAHA.poiT = 18; const c = [], food = [], KR = MOBILE ? 230 : 360;
+    NAHA.poiT = 18; const c = [], food = [], KR = MOBILE ? 240 : 330;
     for (const t of NAHA.tiles.values()) if (t.pois) for (const q of t.pois) { q.dd = Math.hypot(q.x - px, q.z - pz); if (q.dd < PR) c.push(q); else dropPoi(q); if (q.kind && q.dd < KR) food.push(q); }
     c.sort((a, b) => a.dd - b.dd);
     c.forEach((q, i) => { if (i >= PN_) dropPoi(q); else if (!q.sp) { q.sp = textSprite(q.cat ? [q.name, q.cat] : [q.name], { w: 384, h: q.cat ? 96 : 72, stroke: q.kind ? '#ff4fa3' : '#19c8ff' }); q.sp.userData.q = q; if (q.lx === undefined) q.y = heightAt(q.x, q.z) + 4.2; scene.add(q.sp); } });

@@ -70,7 +70,6 @@ addEventListener('keydown', (e) => {
   if (modalOpen) return;
   if (e.code === 'KeyE') doAction(); if (e.code === 'KeyM') openMap(); if (e.code === 'KeyP') openPassport(); if (e.code === 'Space') { e.preventDefault(); jump(); }
   if (INSIDE) return;
-  if (e.code === 'KeyF') toggleFly();
   if (P.mode === 'land' && !P.fly) { if (e.code === 'KeyB' || e.code === 'Digit1') setLand('bike'); if (e.code === 'KeyK' || e.code === 'Digit2') setLand('kart'); if (e.code === 'KeyC' || e.code === 'Digit3') setLand('kei'); }
   else if (!P.fly) { if (e.code === 'Digit1') setCraft('jetski'); if (e.code === 'Digit2') setCraft('sabani'); if (e.code === 'Digit3') setCraft('sup'); }
 });
@@ -116,6 +115,7 @@ function syncRideButtons() {      // land rides and the plane on land, boats on 
   for (const b of document.querySelectorAll('.crafts [data-ctx]')) b.hidden = !b.dataset.ctx.split(' ').includes(ctx);
 }
 function toggleFly() {
+  return;      // the seaplane is parked: this build is about being on the ground
   if (!started || modalOpen || chill || P.diving || INSIDE) return;
   if (!P.fly && P.mode !== 'land') { toast('Seaplane', 'It takes off from land. Head for the shore first.'); return; }
   if (!P.fly) { P.fly = true; P.landing = false; P.vy = 12; P.y += 2; P.speed = Math.max(P.speed, 32); P.air = false; P.jy = 0; toast('Seaplane', 'Stick up to climb, down to descend. Touch down gently to land, on sea or land.'); }
@@ -175,7 +175,7 @@ function updatePlayer(dt) {
   if (P.fly) { flyStep(dt, ix, iy); return; }
   const mag = Math.min(1, Math.hypot(ix, iy)), sea = P.mode === 'sea', ci = CRAFT_INFO[P.craft];
   const ride = !sea && !chill ? LAND[P.land] : null, biking = !!ride;
-  let maxS = P.diving ? 3.2 : sea ? ci.max : ride ? ride.max : 7.5, turn = P.diving ? 5 : sea ? ci.turn : ride ? ride.turn : 10, acc = P.diving ? 6 : sea ? ci.acc : ride ? ride.acc : 30;
+  let maxS = P.diving ? 3.2 : sea ? ci.max : ride ? ride.max : 3.4, turn = P.diving ? 5 : sea ? ci.turn : ride ? ride.turn : 10, acc = P.diving ? 6 : sea ? ci.acc : ride ? ride.acc : 14;
   const boosting = (inp.boost || keys.ShiftLeft || keys.ShiftRight) && mag > .1 && !P.diving;      // no cooldown
   if (boosting) maxS *= sea ? 1.6 : 1.7;
   if (P.buffT > 0) { P.buffT -= dt; maxS *= 1.15; } if (P.luckT > 0) P.luckT -= dt;

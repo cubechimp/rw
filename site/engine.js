@@ -175,7 +175,7 @@ float vn(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);
   return mix(mix(hsh(i),hsh(i+vec2(1.,0.)),f.x),mix(hsh(i+vec2(0.,1.)),hsh(i+vec2(1.,1.)),f.x),f.y);}
 vec3 fogged(vec3 c,vec3 wpos){
   vec3 v=wpos-cameraPosition;float d=length(v);
-  float f=1.-exp(-d/uFogDist);
+  float q=d/uFogDist;float f=1.-exp(-q*q);
   float s=pow(max(dot(normalize(v.xz+vec2(1e-4)),normalize(uSunDir.xz)),0.),6.);
   return mix(c,mix(uFogCol,uGlowCol,s*.5*(1.-uUnder)),f);
 }`;
@@ -318,6 +318,11 @@ const water = new T.Mesh(discGeo(), new T.ShaderMaterial({
     }`,
 }));
 water.renderOrder = 5; water.frustumCulled = false; scene.add(water);
+const paneMat = new T.ShaderMaterial({      // tinted window glass you can see through
+  uniforms: U, transparent: true, depthWrite: false, side: T.DoubleSide,
+  vertexShader: `varying vec3 vW;void main(){vec4 w=modelMatrix*vec4(position,1.);vW=w.xyz;gl_Position=projectionMatrix*viewMatrix*w;}`,
+  fragmentShader: `varying vec3 vW;${GL_COMMON}void main(){gl_FragColor=vec4(fogged(vec3(.55,.78,.86)*(uAmbSky*.9+uSunCol*.25),vW),.36);}`,
+});
 const deepU = Object.assign({ uCol: waterU.uDeep }, U);
 const deepPlane = new T.Mesh(new T.CircleGeometry(4000, 24).rotateX(-Math.PI / 2), new T.ShaderMaterial({
   uniforms: deepU, vertexShader: `varying vec3 vW;void main(){vec4 w=modelMatrix*vec4(position,1.);vW=w.xyz;gl_Position=projectionMatrix*viewMatrix*w;}`,
@@ -393,8 +398,8 @@ function applyMood(under) {
   U.uAmbGnd.value.set(lerp(a.gnd[0], b.gnd[0], t), lerp(a.gnd[1], b.gnd[1], t), lerp(a.gnd[2], b.gnd[2], t));
   U.uSunCol.value.set(lerp(a.sun[0], b.sun[0], t), lerp(a.sun[1], b.sun[1], t), lerp(a.sun[2], b.sun[2], t));
   U.uNight.value = lerp(a.night, b.night, t);
-  if (under) { U.uFogCol.value.copy(waterU.uShallow.value).multiplyScalar(.55).add(new T.Vector3(0, .08, .18)); U.uFogDist.value = 55; U.uUnder.value = 1; }
-  else { U.uFogCol.value.copy(skyU.uHor.value); U.uFogDist.value = lerp(a.fog, b.fog, t); U.uUnder.value = 0; }
+  if (under) { U.uFogCol.value.copy(waterU.uShallow.value).multiplyScalar(.55).add(new T.Vector3(0, .08, .18)); U.uFogDist.value = 40; U.uUnder.value = 1; }
+  else { U.uFogCol.value.copy(skyU.uHor.value); U.uFogDist.value = VIEW / 2 * lerp(a.fog, b.fog, t) / 16000; U.uUnder.value = 0; }
 }
 
 /* ---------------- geometry helpers ---------------- */
@@ -460,7 +465,8 @@ makeInst('orb', orbGeo(), 400, objMat);
 const INST_TYPES = ['palm', 'tree', 'house', 'tower', 'orb'];
 
 /* ---------------- terrain chunks ---------------- */
-const CS = 384, NS = 24, FS = 3072, NEAR_R = MOBILE ? 3 : 4, FAR_R = MOBILE ? 5 : 7;
+const VIEW = MOBILE ? 480 : 600;      // how far you can see, in metres: haze hides everything beyond it
+const CS = 384, NS = 24, FS = 3072, NEAR_R = 2, FAR_R = 1;
 U.uRing.value.z = NEAR_R * CS - 110;
 const gridIndex = (() => { const a = []; const w = NS + 1; for (let j = 0; j < NS; j++) for (let i = 0; i < NS; i++) { const p = j * w + i; a.push(p, p + w, p + 1, p + 1, p + w, p + w + 1); } return new T.BufferAttribute(new Uint16Array(a), 1); })();
 const nearChunks = new Map(), farChunks = new Map(); let instDirty = false;
