@@ -131,7 +131,7 @@ function buildNahaTile(t) {
 }
 function nahaPip(f, x, z) { let inside = false; const xs = f.xs, zs = f.zs; for (let i = 0, j = f.n - 1; i < f.n; j = i++) if ((zs[i] > z) !== (zs[j] > z) && x < (xs[j] - xs[i]) * (z - zs[i]) / (zs[j] - zs[i]) + xs[i]) inside = !inside; return inside; }
 /* is this spot inside a building, below its roof? */
-const NB = .5 * PS;      // how much room you need beside a wall
+const NB = .6 * PS;      // how much room you need beside a wall
 function nahaBlocked(x, z, y) {
   const S = NAHA.size, tx = Math.floor(x / S), tz = Math.floor(z / S), k = tx + '_' + tz, lx = x - tx * S, lz = z - tz * S, ci = Math.floor(lz / 16) * 48 + Math.floor(lx / 16);
   for (const set of NAHA.sets) {

@@ -465,7 +465,7 @@ makeInst('orb', orbGeo(), 400, objMat);
 const INST_TYPES = ['palm', 'tree', 'house', 'tower', 'orb'];
 
 /* ---------------- terrain chunks ---------------- */
-const WS = .5, PS = 1 / WS;      // world scale: distances are half of real, so everything that is yours is twice as big and twice as fast
+const WS = 1, PS = 1 / WS;      // world scale: 1 is true scale. At .5 everything that is yours is drawn twice as big and moves twice as fast, which halves every distance
 const VIEW = MOBILE ? 480 : 600;      // how far you can see, in metres: haze hides everything beyond it
 const CS = 384, NS = 24, FS = 3072, NEAR_R = 2, FAR_R = 1;
 U.uRing.value.z = NEAR_R * CS - 110;

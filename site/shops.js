@@ -88,7 +88,7 @@ function placeShop(q) {
       const px = o.px + o.ux * sl, pz = o.pz + o.uz * sl, wx = t.tx * S + px, wz = t.tz * S + pz, fx = wx + n[0] * 1.7, fz = wz + n[1] * 1.7, sy = Math.min(groundAt(fx, fz), groundAt(wx, wz));
       if (sy < .3 || !free(px, pz, 4.8) || nahaBlocked(fx, fz, sy + 1)) continue;
       doors.push([px, pz]); q.kit = 1; q.kx = wx + n[0] * .06; q.kz = wz + n[1] * .06; q.ky = sy; q.kr = Math.atan2(-n[0], -n[1]); q.ks = clamp(o.L / 5, .56, 1);
-      q.dx = fx; q.dz = fz; q.nh = Math.atan2(n[0], -n[1]); q.lx = wx + n[0] * .5; q.lz = wz + n[1] * .5; q.y = sy + 6.6; return;
+      q.dx = fx; q.dz = fz; q.nh = Math.atan2(n[0], -n[1]); q.lx = wx + n[0] * .5; q.lz = wz + n[1] * .5; q.y = sy + 5; return;
     }
   }
   if (opts.length) {      // no frontage left on this building (a mall, a food hall): it shares a doorway
@@ -114,15 +114,15 @@ function updateShops(food) {
   for (const q of food) {
     if (!q.placed) { if (placed >= 30 || !shopTilesReady(q)) continue; placeShop(q); placed++; if (q.sp && q.lx !== undefined) dropPoi(q); }
     if (!q.kit) continue; const I = INST['shop_' + q.kind]; if (n[q.kind] >= I.cap) continue;
-    _m.compose(_p.set(q.kx - OX, q.ky, q.kz - OZ), _q.setFromAxisAngle(Y_AXIS, q.kr), _s.set(q.ks, 1.5, 1.2)); /* taller doors for the bigger you */ _m.toArray(I.mesh.instanceMatrix.array, n[q.kind] * 16); I.q[n[q.kind]++] = q;
-    if (q.hut && huts < H.cap) { _m.compose(_p, _q, _s.set(1, 1.5, 1)); _m.toArray(H.mesh.instanceMatrix.array, huts++ * 16); }
+    _m.compose(_p.set(q.kx - OX, q.ky, q.kz - OZ), _q.setFromAxisAngle(Y_AXIS, q.kr), _s.set(q.ks, 1, 1)); _m.toArray(I.mesh.instanceMatrix.array, n[q.kind] * 16); I.q[n[q.kind]++] = q;
+    if (q.hut && huts < H.cap) { _m.compose(_p, _q, _s.set(1, 1, 1)); _m.toArray(H.mesh.instanceMatrix.array, huts++ * 16); }
   }
   for (const k of SHOP_KINDS) { const M = INST['shop_' + k].mesh; M.count = n[k]; M.instanceMatrix.needsUpdate = true; M.boundingSphere = null; M.userData.q = INST['shop_' + k].q; }
   H.mesh.count = huts; H.mesh.instanceMatrix.needsUpdate = true;
 }
 function shopsAtDoor() {      // restaurants whose door you are standing at
   const r = []; if (!NAHA.food) return r;
-  for (const q of NAHA.food) { if (!q.placed) continue; const d = Math.hypot(q.dx - P.x, q.dz - P.z); if (d < 8) { q.dr = d; r.push(q); } }
+  for (const q of NAHA.food) { if (!q.placed) continue; const d = Math.hypot(q.dx - P.x, q.dz - P.z); if (d < 5.5) { q.dr = d; r.push(q); } }
   return r.sort((a, b) => a.dr - b.dr);
 }
 

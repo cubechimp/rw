@@ -1,6 +1,6 @@
 /* Ryukyu World: water sports behind a tow boat. Start one from any beach. */
 'use strict';
-const TOW = {      // speed and rope are in avatar metres; the world is half scale, so both are multiplied by PS on the water
+const TOW = {      // speed in metres per second, rope in metres
   ski: { label: 'Water ski', jp: '水上スキー', icon: '🎿', rope: 15, speed: 42.5, swing: 1, air: 1, m: 9, tip: 'Carve across the wake to jump, and line up with the ramps for big air.' },
   wake: { label: 'Wakeboard', jp: 'ウェイクボード', icon: '🏄', rope: 13, speed: 32.5, swing: .9, air: 1.7, m: 10, tip: 'A bigger wake: more air on every crossing, and off every ramp.' },
   banana: { label: 'Banana boat', jp: 'バナナボート', icon: '🍌', rope: 11, speed: 31, swing: .5, air: 0, m: 11, tip: 'The driver wants you off. Hold the Hold on button through every whip, and let go between them to rest your arms.' },
@@ -117,13 +117,13 @@ function towStep(dt, ix, iy) {
   if (tight) want = (lf < rt ? -1 : 1) * (ah > -2 ? 1.0 : .55);
   else { const hx = W.home.x - W.bx, hz = W.home.z - W.bz; if (Math.hypot(hx, hz) > 500 + top * 12 && !(kind === 'banana' && W.ph !== 'calm')) { let d = Math.atan2(hx, -hz) - W.bh; d = Math.atan2(Math.sin(d), Math.cos(d)); want = clamp(d, -.5, .5); } }
   W.bs = lerp(W.bs, ending ? 0 : top * (ah > -2 ? .6 : 1), dt * (ending ? 1.3 : .7));
-  W.turn = lerp(W.turn, want, dt * 3); W.bh += W.turn * dt * Math.min(1, W.bs / 12);
+  W.turn = lerp(W.turn, want, dt * 3); W.bh += W.turn * dt * Math.min(1, W.bs / (top * .3));
   W.bx += Math.sin(W.bh) * W.bs * dt; W.bz -= Math.cos(W.bh) * W.bs * dt;
   // the rider swings on the rope: s is how far to the boat's right, in radians of rope
-  const live = W.bs > 8 ? 1 : 0, was = W.s;
+  const live = W.bs > top * .25 ? 1 : 0, was = W.s;
   W.sv += (clamp(ix, -1, 1) * 3.2 * K.swing * live - W.s * 1.8 - W.sv * 1.3 - W.turn * 1.6) * dt; W.s += W.sv * dt; if (Math.abs(W.s) > 1.05) { W.s = Math.sign(W.s) * 1.05; W.sv = 0; }
-  if (K.air && was * W.s < 0 && Math.abs(W.sv) > .85 && !P.air && !W.onRamp && W.bs > 16) { P.air = true; P.vy = (3.2 + Math.abs(W.sv) * 2.4) * Math.sqrt(K.air) * PS; W.jumps++; ding(880 + W.jumps * 30, 1320 + W.jumps * 45); splash(P.x - OX, P.z - OZ, 14, 5); }
-  if (kind === 'para') { W.altT = clamp(W.altT + clamp(iy, -1, 1) * 14 * PS * dt, 8 * PS, 46 * PS); W.alt = lerp(W.alt, W.bs > 14 ? W.altT : 0, dt * .8); W.top = Math.max(W.top, W.alt); }
+  if (K.air && was * W.s < 0 && Math.abs(W.sv) > .85 && !P.air && !W.onRamp && W.bs > top * .4) { P.air = true; P.vy = (3.2 + Math.abs(W.sv) * 2.4) * Math.sqrt(K.air) * PS; W.jumps++; ding(880 + W.jumps * 30, 1320 + W.jumps * 45); splash(P.x - OX, P.z - OZ, 14, 5); }
+  if (kind === 'para') { W.altT = clamp(W.altT + clamp(iy, -1, 1) * 14 * PS * dt, 8 * PS, 46 * PS); W.alt = lerp(W.alt, W.bs > top * .6 ? W.altT : 0, dt * .8); W.top = Math.max(W.top, W.alt); }
   const L = K.rope * PS, Lh = Math.sqrt(Math.max(64 * PS * PS, L * L - W.alt * W.alt)), ph = W.bh - W.s; P.x = W.bx - Math.sin(ph) * Lh; P.z = W.bz + Math.cos(ph) * Lh; P.gh = heightAt(P.x, P.z);
   // ramps for skis and boards: one floats ahead and to one side, so you have to carve out to meet it
   if (K.air) {
@@ -146,11 +146,11 @@ function towStep(dt, ix, iy) {
   me.rotation.set(W.onRamp ? Math.atan2(RAMP_H, RAMP_L) : P.air ? .25 : kind === 'ski' || kind === 'wake' ? .1 : kind === 'banana' ? Math.sin(tNow * 9) * .05 * live : 0, -P.h, kind === 'para' ? W.s * .25 : clamp(-W.sv * .35 - (kind === 'banana' ? W.turn * .55 : 0), -.7, .7));
   poseIslander(me, 'sea', P.craft, false, tNow, P.speed / PS, { dt, tow: kind, air: P.air });
   // the boat and the line
-  const by = waveH(W.bx - OX, W.bz - OZ, tNow) + .1; towBoat.position.set(W.bx - OX, by, W.bz - OZ); towBoat.rotation.set(clamp(W.bs * .003, 0, .16), -W.bh, -W.turn * .3);
+  const by = waveH(W.bx - OX, W.bz - OZ, tNow) + .1; towBoat.position.set(W.bx - OX, by, W.bz - OZ); towBoat.rotation.set(clamp(W.bs / top * .14, 0, .16), -W.bh, -W.turn * .3);
   const ax = W.bx - Math.sin(W.bh) * 1.1 * PS - OX, ay = by + 2.2 * PS, az = W.bz + Math.cos(W.bh) * 1.1 * PS - OZ, fw = (kind === 'banana' ? 1.9 : kind === 'para' ? 0 : .6) * PS, hy = (kind === 'banana' ? .8 : kind === 'para' ? 1.2 : 1.05) * PS;
   const tx = me.position.x + Math.sin(P.h) * fw, ty = P.y + hy, tz = me.position.z - Math.cos(P.h) * fw, len = Math.hypot(tx - ax, ty - ay, tz - az);
   towRope.position.set((ax + tx) / 2, (ay + ty) / 2, (az + tz) / 2); towRope.lookAt(tx, ty, tz); towRope.scale.set(PS, PS, len);
-  if (W.bs > 12) { if (Math.random() < dt * 26) splash(W.bx - Math.sin(W.bh) * 5 - OX, W.bz + Math.cos(W.bh) * 5 - OZ, 3, 5); if (kind !== 'para' && !P.air && !W.onRamp && Math.random() < dt * 22) splash(P.x - OX, P.z - OZ, 2, 3); }
+  if (W.bs > top * .3) { if (Math.random() < dt * 26) splash(W.bx - Math.sin(W.bh) * 2.6 * PS - OX, W.bz + Math.cos(W.bh) * 2.6 * PS - OZ, 3, 5); if (kind !== 'para' && !P.air && !W.onRamp && Math.random() < dt * 22) splash(P.x - OX, P.z - OZ, 2, 3); }
   collectFloats();
-  if ((ending && W.bs < 2.8) || heightAt(W.bx, W.bz) > -.5) endTow('done');
+  if ((ending && W.bs < 1.4 * PS) || heightAt(W.bx, W.bz) > -.5) endTow('done');
 }
