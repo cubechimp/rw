@@ -60,8 +60,9 @@ def address(v):
         free, loc, post = str(g('freeform')).strip(), str(g('locality')).strip(), str(g('postcode')).strip()
         out = free
         if loc and loc not in free: out = (loc + ' ' + free).strip()
+        out = out[:64].strip()
         if post and post not in out: out = (out + ' \u3012' + post).strip()
-        return out[:70]
+        return out
     except Exception:
         return ''
 def polys(g):
