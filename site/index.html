@@ -72,6 +72,8 @@ button:focus-visible{outline:3px solid #fff;outline-offset:2px}
 .crafts{grid-column:1/3;display:flex;gap:8px;min-height:44px}
 .crafts [hidden]{display:none!important}
 #bJump[hidden]{visibility:hidden}
+#bBoost.alert{animation:holdon .28s linear infinite alternate}@keyframes holdon{from{box-shadow:0 0 0 0 #ff3b5c}to{box-shadow:0 0 0 7px #ff3b5c}}
+@media (prefers-reduced-motion:reduce){#bBoost.alert{animation:none;box-shadow:0 0 0 6px #ff3b5c}}
 #act{grid-column:1/3;border-radius:999px;padding:11px 20px;font-family:var(--display);font-size:15px;color:#fff;
   background:linear-gradient(180deg,#ffd9ec 0,var(--pink) 38%,#c2187a 100%);border:1.5px solid #fff;
   box-shadow:0 6px 16px rgba(120,10,80,.45),inset 0 10px 8px rgba(255,255,255,.35);text-shadow:0 1px 2px rgba(90,0,60,.6);max-width:64vw;
@@ -127,8 +129,6 @@ button:focus-visible{outline:3px solid #fff;outline-offset:2px}
 .head{display:flex;gap:14px;align-items:center}
 .tabs{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}
 .tabs button{padding:6px 12px;border-radius:999px;font-size:13px;font-weight:800;background:#d9f4ff;border:1px solid #9fdcff}
-.tabs button:disabled{opacity:.4}
-.kinds h3{font-size:13px;margin:10px 0 0;color:var(--ink-soft);letter-spacing:.04em}.kinds .tabs{margin:4px 0}
 .tabs button[aria-selected=true]{background:linear-gradient(180deg,#7de3ff,var(--aqua-deep));color:#fff;border-color:#fff}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:10px;justify-items:center}
 .list{display:flex;flex-direction:column;gap:6px}
@@ -241,7 +241,7 @@ body.gba #fade{background:#5890d8;font-family:var(--display)}
   <div class="card glass">
     <h1 class="logo">Ryukyu World</h1>
     <div class="logo-jp">琉球ワールド</div>
-    <p class="tag">All of Okinawa at true scale. Ride the lagoon, eat island food, collect stamps, say <b>haisai</b>.</p>
+    <p class="tag">All of Okinawa on a real map at half scale. Ride the lagoon, eat island food, collect stamps, say <b>haisai</b>.</p>
     <div class="namerow"><span id="nick">…</span><button class="bubble sm" id="reroll" aria-label="New island name" title="New island name"><span>🎲</span></button></div>
     <div class="swatches" id="swatches" role="group" aria-label="Shirt colour"></div>
     <div><button class="glass pill" id="style" style="margin-bottom:12px">Menu style: Pixel</button></div>

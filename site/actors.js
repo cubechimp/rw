@@ -98,7 +98,7 @@ function makeIslander(colorIdx) {
   for (const k of TOW_KINDS) rides[k] = new T.Mesh(towGearGeo(k, shirt), objMat);
   const glass = new T.Mesh(keiGlassGeo(), paneMat); glass.frustumCulled = false; glass.renderOrder = 6; rides.kei.add(glass);
   for (const k in rides) { rides[k].visible = false; rides[k].frustumCulled = false; g.add(rides[k]); }
-  g.userData = { parts, rides, a: { ph: 0 } }; scene.add(g); return g;
+  g.userData = { parts, rides, a: { ph: 0 } }; g.scale.setScalar(PS); scene.add(g); return g;
 }
 function poseIslander(g, mode, craft, diving, t, speed, opt) {
   const u = g.userData, p = u.parts, a = u.a, dt = (opt && opt.dt) || .016, ride = mode === 'land' && opt && LAND[opt.ride] ? opt.ride : null, biking = ride === 'bike', air = !!(opt && opt.air), tow = mode === 'sea' && opt && TOW[opt.tow] ? opt.tow : null;
@@ -192,6 +192,7 @@ function initPlaces() {
     const w = WORLD.places[d.id]; if (!w) continue;
     const pl = Object.assign({ x: w[0], z: w[1], cx: w[2], cz: w[3] }, d); pl.y = Math.max(.3, heightAt(pl.x, pl.z));
     const g = new T.Group(), face = Math.atan2(pl.cx - pl.x, -(pl.cz - pl.z));   // face the sea
+    g.scale.setScalar(PS);
     if (d.food) { const s = new T.Mesh(sg, objMat); s.rotation.y = -face + Math.PI; s.position.set(Math.sin(face + 1.3) * 7, 0, -Math.cos(face + 1.3) * 7); g.add(s); }
     for (const sgn of [-1, 1]) { const s = new T.Mesh(hg, objMat); s.scale.setScalar(.62); s.rotation.y = -face + Math.PI; s.position.set(Math.sin(face + sgn * .5 + 3.14) * 6, 0, -Math.cos(face + sgn * .5 + 3.14) * 6); g.add(s); }
     demAt(pl.x, pl.z); const lg = demW > .5 ? null : landmarkGeo(d.lm); if (lg) { const s = new T.Mesh(lg, objMat); s.rotation.y = -face + Math.PI; const off = d.lm === 'torii' ? 9 : d.lm === 'stones' ? 14 : 26; s.position.set(Math.sin(face + 3.14) * off, 0, -Math.cos(face + 3.14) * off); s.position.y = Math.max(0, heightAt(pl.x + s.position.x, pl.z + s.position.z) - pl.y) - .2; g.add(s); }
@@ -211,7 +212,7 @@ function updatePlaces(t, px, pz, stamps) {
     if (!p.group.visible) continue;
     p.crystal.rotation.y = t * 1.2; p.crystal.position.y = 9 + Math.sin(t * 1.6 + p.x) * .5;
     const seen = !!stamps[p.id]; p.crystal.material.uniforms.uTint.value.set(seen ? .35 : 1, seen ? .95 : .35, seen ? 1 : .7);
-    const s = clamp(d * .11, 3, 1500); p.label.scale.set(s * p.label.userData.aspect * .5, s * .5, 1); p.label.position.y = 12 + s * .3;
+    const s = clamp(d * .11, 3, 1500) / PS; p.label.scale.set(s * p.label.userData.aspect * .5, s * .5, 1); p.label.position.y = 12 + s * .3;
     p.label.material.opacity = clamp(1 - (d - VIEW * .8) / (VIEW * .7), 0, 1); p.pillar.visible = d > 120;
   }
 }
@@ -293,12 +294,12 @@ function updateRemotes(dt, t) {
     r.x = far ? r.tx : lerp(r.x, r.tx, k); r.z = far ? r.tz : lerp(r.z, r.tz, k); r.y = lerp(r.y, r.ty, k);
     let dh = r.th - r.h; dh = Math.atan2(Math.sin(dh), Math.cos(dh)); r.h += dh * k;
     const here = !!(r.in && INSIDE && INSIDE.id === r.in), home = here ? inScene : scene;      // people inside a restaurant are only seen by others in the same one
-    if (r.g.parent !== home) { home.add(r.g); home.add(r.label); r.ix = r.tix; r.iz = r.tiz; } r.g.visible = r.label.visible = here || !r.in;
+    if (r.g.parent !== home) { home.add(r.g); home.add(r.label); r.ix = r.tix; r.iz = r.tiz; r.g.scale.setScalar(here ? 1 : PS); } const up = here ? 1 : PS; r.g.visible = r.label.visible = here || !r.in;
     let sp = far ? 0 : Math.hypot(r.tx - r.x, r.tz - r.z) * 8;
     if (here) { sp = Math.hypot(r.tix - r.ix, r.tiz - r.iz) * 8; r.ix = lerp(r.ix, r.tix, k); r.iz = lerp(r.iz, r.tiz, k); r.g.position.set(r.ix, 0, r.iz); } else r.g.position.set(r.x - OX, r.y, r.z - OZ);
     r.g.rotation.y = -r.h; const gp = r.g.position;
-    poseIslander(r.g, here ? 'land' : r.mode, r.craft, r.diving, t, sp, { dt, ride: here ? null : r.ride, tow: here ? null : r.tow });
-    r.label.position.set(gp.x, gp.y + 3.1, gp.z); r.label.scale.set(2.6, .65, 1);
-    if (r.bubble) { r.bubbleT -= dt; r.bubble.position.set(gp.x, gp.y + 4.1, gp.z); r.bubble.scale.set(3.2, .92, 1); if (r.bubbleT <= 0) { r.bubble.removeFromParent(); r.bubble = null; } }
+    poseIslander(r.g, here ? 'land' : r.mode, r.craft, r.diving, t, here ? sp : sp / PS, { dt, ride: here ? null : r.ride, tow: here ? null : r.tow });
+    r.label.position.set(gp.x, gp.y + 3.1 * up, gp.z); r.label.scale.set(2.6 * up, .65 * up, 1);
+    if (r.bubble) { r.bubbleT -= dt; r.bubble.position.set(gp.x, gp.y + 4.1 * up, gp.z); r.bubble.scale.set(3.2 * up, .92 * up, 1); if (r.bubbleT <= 0) { r.bubble.removeFromParent(); r.bubble = null; } }
   }
 }

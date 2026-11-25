@@ -4,16 +4,16 @@ const NAHA = { idx: null, tiles: new Map(), size: 768, sets: [] };
 const N_PAL = [0xf4efe6, 0xe9e4da, 0xdfe7ea, 0xf3e3d3, 0xe6d9c8, 0xd9e3d6, 0xf6e9ee, 0xcfd6dc, 0xfff6dc, 0xd8cfc4].map(hex3);
 const bldMat = new T.ShaderMaterial({
   uniforms: U, side: T.DoubleSide,
-  vertexShader: `attribute vec3 aCol;attribute vec2 aInfo;varying vec3 vCol,vN,vW;varying vec2 vInfo;
-    void main(){vCol=aCol;vInfo=aInfo;vec4 w=modelMatrix*vec4(position,1.);vW=w.xyz;vN=normal;gl_Position=projectionMatrix*viewMatrix*w;}`,
-  fragmentShader: `varying vec3 vCol,vN,vW;varying vec2 vInfo;${GL_COMMON}
+  vertexShader: `attribute vec3 aCol;attribute vec2 aInfo;varying vec3 vCol,vN,vW;varying vec2 vInfo;varying float vSeed;
+    void main(){vCol=aCol;vInfo=aInfo;vSeed=floor(fract(aInfo.x*3.7+aInfo.y*1.3)*997.);vec4 w=modelMatrix*vec4(position,1.);vW=w.xyz;vN=normal;gl_Position=projectionMatrix*viewMatrix*w;}`,
+  fragmentShader: `varying vec3 vCol,vN,vW;varying vec2 vInfo;varying float vSeed;${GL_COMMON}
     void main(){
       if(distance(vW.xz,uRing.xy)>uRing.z+45.)discard;
       vec3 n=normalize(vN);if(!gl_FrontFacing)n=-n;
       vec3 col=vCol;float glow=0.;
       if(abs(n.y)<.5){
         vec2 t=normalize(vec2(-n.z,n.x)+1e-5);float u=dot(vW.xz,t),v=vW.y-vInfo.x;
-        float seed=hsh(vec2(floor(vInfo.x*37.),floor(vInfo.y*13.)));
+        float sid=floor(vSeed+.5),seed=hsh(vec2(sid,sid*.61+7.));      // a whole number per building, so it is the same on every pixel
         vec2 cell=vec2(floor(u/3.),floor(v/3.2)),f=vec2(fract(u/3.),fract(v/3.2));
         bool shop=vInfo.y>7.&&seed>.3;
         if(v>3.4||(!shop&&v>.4)){
@@ -131,11 +131,12 @@ function buildNahaTile(t) {
 }
 function nahaPip(f, x, z) { let inside = false; const xs = f.xs, zs = f.zs; for (let i = 0, j = f.n - 1; i < f.n; j = i++) if ((zs[i] > z) !== (zs[j] > z) && x < (xs[j] - xs[i]) * (z - zs[i]) / (zs[j] - zs[i]) + xs[i]) inside = !inside; return inside; }
 /* is this spot inside a building, below its roof? */
+const NB = .5 * PS;      // how much room you need beside a wall
 function nahaBlocked(x, z, y) {
   const S = NAHA.size, tx = Math.floor(x / S), tz = Math.floor(z / S), k = tx + '_' + tz, lx = x - tx * S, lz = z - tz * S, ci = Math.floor(lz / 16) * 48 + Math.floor(lx / 16);
   for (const set of NAHA.sets) {
     const t = NAHA.tiles.get(set.dir + ':' + k), a = t && t.cg && t.cg[ci]; if (!a) continue;
-    for (const fi of a) { const f = t.foot[fi]; if (lx < f.a0 - .6 || lx > f.a1 + .6 || lz < f.c0 - .6 || lz > f.c1 + .6 || y > f.top) continue; if (nahaPip(f, lx, lz) || nahaPip(f, lx + .6, lz) || nahaPip(f, lx - .6, lz) || nahaPip(f, lx, lz + .6) || nahaPip(f, lx, lz - .6)) return true; }
+    for (const fi of a) { const f = t.foot[fi]; if (lx < f.a0 - NB || lx > f.a1 + NB || lz < f.c0 - NB || lz > f.c1 + NB || y > f.top) continue; if (nahaPip(f, lx, lz) || nahaPip(f, lx + NB, lz) || nahaPip(f, lx - NB, lz) || nahaPip(f, lx, lz + NB) || nahaPip(f, lx, lz - NB)) return true; }
   }
   return false;
 }
@@ -181,7 +182,7 @@ function updateNaha(px, pz, budget) {
     const show2 = !!t.mesh2 && d < L2 + (t.show2 ? 150 : 0); t.show2 = show2; if (t.mesh2) t.mesh2.visible = show2; if (t.meshB) t.meshB.visible = !show2;
   }
   // business labels: the nearest ones get a sign, re-chosen a few times a second
-  const PR = MOBILE ? 150 : 210, PN_ = MOBILE ? 60 : 120;
+  const PR = MOBILE ? 55 : 70, PN_ = MOBILE ? 14 : 24;      // business signs only show when you are right there
   if (!(NAHA.poiT-- > 0)) {
     NAHA.poiT = 18; const c = [], food = [], KR = MOBILE ? 240 : 330;
     for (const t of NAHA.tiles.values()) if (t.pois) for (const q of t.pois) { q.dd = Math.hypot(q.x - px, q.z - pz); if (q.dd < PR) c.push(q); else dropPoi(q); if (q.kind && q.dd < KR) food.push(q); }
