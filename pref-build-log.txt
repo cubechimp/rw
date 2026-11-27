@@ -1,0 +1,69 @@
+Downloading: 0 rows [00:00, ? rows/s]Downloading: 17363 rows [00:00, 44695.98 rows/s]Downloading: 107210 rows [00:00, 273137.62 rows/s]Downloading: 202879 rows [00:00, 461780.60 rows/s]Downloading: 236225 rows [00:00, 374100.60 rows/s]
+State saved to work/okinawa_building.parquet.state
+okinawa buildings 236225
+Downloading: 0 rows [00:00, ? rows/s]Downloading: 14264 rows [00:00, 35378.77 rows/s]Downloading: 61558 rows [00:00, 141481.57 rows/s]Downloading: 103828 rows [00:00, 211214.29 rows/s]Downloading: 144343 rows [00:00, 259936.35 rows/s]Downloading: 145204 rows [00:00, 194746.86 rows/s]
+State saved to work/okinawa_segment.parquet.state
+okinawa segments 145204
+Downloading: 0 rows [00:00, ? rows/s]Downloading: 25305 rows [00:00, 100071.24 rows/s]Downloading: 42149 rows [00:00, 139733.33 rows/s]
+State saved to work/okinawa_place.parquet.state
+okinawa places 42149
+Downloading: 0 rows [00:00, ? rows/s]Downloading: 14605 rows [00:00, 58663.36 rows/s]Downloading: 33149 rows [00:00, 121654.93 rows/s]
+State saved to work/miyako_building.parquet.state
+miyako buildings 33149
+Downloading: 0 rows [00:00, ? rows/s]Downloading: 14525 rows [00:00, 65027.45 rows/s]Downloading: 14525 rows [00:00, 64110.95 rows/s]
+State saved to work/miyako_segment.parquet.state
+miyako segments 14525
+Downloading: 0 rows [00:00, ? rows/s]Downloading: 432 rows [00:00, 2080.89 rows/s]Downloading: 2542 rows [00:00, 11693.13 rows/s]
+State saved to work/miyako_place.parquet.state
+miyako places 2542
+Downloading: 0 rows [00:00, ? rows/s]Downloading: 4 rows [00:00, 20.11 rows/s]Downloading: 3121 rows [00:00, 10739.19 rows/s]Downloading: 26430 rows [00:00, 69090.13 rows/s]
+State saved to work/yaeyama_building.parquet.state
+yaeyama buildings 26430
+Downloading: 0 rows [00:00, ? rows/s]Downloading: 12013 rows [00:00, 46450.47 rows/s]Downloading: 12013 rows [00:00, 45888.21 rows/s]
+State saved to work/yaeyama_segment.parquet.state
+yaeyama segments 12013
+Downloading: 0 rows [00:00, ? rows/s]Downloading: 92 rows [00:00, 549.09 rows/s]Downloading: 4136 rows [00:00, 22403.10 rows/s]
+State saved to work/yaeyama_place.parquet.state
+yaeyama places 4136
+Downloading: 0 rows [00:00, ? rows/s]Downloading: 1580 rows [00:00, 7392.54 rows/s]Downloading: 1580 rows [00:00, 7280.58 rows/s]
+State saved to work/daito_building.parquet.state
+daito buildings 1580
+Downloading: 0 rows [00:00, ? rows/s]Downloading: 1 rows [00:00,  3.84 rows/s]Downloading: 809 rows [00:00, 3016.74 rows/s]
+State saved to work/daito_segment.parquet.state
+daito segments 809
+Downloading: 0 rows [00:00, ? rows/s]Downloading: 79 rows [00:00, 449.10 rows/s]Downloading: 79 rows [00:00, 441.07 rows/s]
+State saved to work/daito_place.parquet.state
+daito places 79
+{
+ "height_estimated": 233797,
+ "buildings": 239360,
+ "height_from_floors": 5465,
+ "skipped_in_naha": 56353,
+ "height_recorded": 98,
+ "road_km": 22306,
+ "places_with_address": 44544,
+ "places_with_phone": 32484,
+ "places": 45403,
+ "places_low_confidence": 3503,
+ "tiles": 4293,
+ "bundles": 116,
+ "megabytes": 23.1,
+ "regions": {
+  "okinawa": {
+   "buildings": 178732,
+   "places": 39018
+  },
+  "miyako": {
+   "buildings": 32862,
+   "places": 2392
+  },
+  "yaeyama": {
+   "buildings": 26193,
+   "places": 3917
+  },
+  "daito": {
+   "buildings": 1573,
+   "places": 76
+  }
+ }
+}

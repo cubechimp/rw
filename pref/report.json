@@ -1,0 +1,33 @@
+{
+ "height_estimated": 233797,
+ "buildings": 239360,
+ "height_from_floors": 5465,
+ "skipped_in_naha": 56353,
+ "height_recorded": 98,
+ "road_km": 22306,
+ "places_with_address": 44544,
+ "places_with_phone": 32484,
+ "places": 45403,
+ "places_low_confidence": 3503,
+ "tiles": 4293,
+ "bundles": 116,
+ "megabytes": 23.1,
+ "regions": {
+  "okinawa": {
+   "buildings": 178732,
+   "places": 39018
+  },
+  "miyako": {
+   "buildings": 32862,
+   "places": 2392
+  },
+  "yaeyama": {
+   "buildings": 26193,
+   "places": 3917
+  },
+  "daito": {
+   "buildings": 1573,
+   "places": 76
+  }
+ }
+}
