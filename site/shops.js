@@ -3,7 +3,7 @@
 const FOOD_KIND = { restaurant: 'eat', casual_eatery: 'eat', food_and_drink: 'eat', food_court: 'eat', food_service: 'eat', bar: 'bar', lounge: 'bar', nightlife_venue: 'bar', brewery: 'bar', winery: 'bar',
   cafe: 'cafe', coffee_shop: 'cafe', smoothie_juice_bar: 'cafe', fast_food_restaurant: 'fast', food_truck_stand: 'fast' };
 function foodKind(cat) {
-  cat = String(cat || ''); if (FOOD_KIND[cat]) return FOOD_KIND[cat];
+  cat = String(cat || ''); if (cat === 'arcade') return 'arcade'; if (FOOD_KIND[cat]) return FOOD_KIND[cat];
   if (/store|shop$|market|delivery|bank|supplier|barber/.test(cat) && !/coffee|tea|dessert|ice_cream|bakery/.test(cat)) return null;
   if (/fast_food|burger|pizza|food_truck|sandwich/.test(cat)) return 'fast';
   if (/cafe|coffee|tea_room|bakery|dessert|ice_cream|juice/.test(cat)) return 'cafe';
@@ -21,6 +21,7 @@ const SHOP = {
   fast: { label: 'Quick bites 軽食', icon: '🍔', a: 0xffc21f, b: 0xe8452c, sign: 0xe8452c, wall: 0xfff1c9, noren: 0xe8452c, floor: 0xfff6e6, floor2: 0xe8452c, in: 0xfff1c9, trim: 0xe8452c, lamp: 0xffe14a,
     menu: ['tacorice', 'burger', 'porktamago', 'shrimp', 'softcream', 'sata'] },
 };
+SHOP.arcade = { label: 'Game centre ゲームセンター', icon: '🕹️', a: 0xff4fa3, b: 0x19c8ff, sign: 0x6a2bd0, wall: 0x2a2350, noren: 0xffe14a, floor: 0x1d2140, floor2: 0x2a2f5c, in: 0x2b2a55, trim: 0x19c8ff, lamp: 0xff4fa3, menu: [] };      // see arcade.js
 const SHOP_KINDS = Object.keys(SHOP), WOOD = 0x6b4630;
 
 /* ---------- outside: a shopfront kit that goes on the wall of the real building ---------- */
@@ -109,7 +110,7 @@ function placeShop(q) {
   q.dx = q.x + nx * 4; q.dz = q.z + nz * 4; q.nh = Math.atan2(nx, -nz); q.lx = q.kx; q.lz = q.kz; q.y = gy + 6.2;
 }
 function updateShops(food) {
-  food.sort((a, b) => a.dd - b.dd); const KN = MOBILE ? 110 : 240, n = { eat: 0, bar: 0, cafe: 0, fast: 0 }; let placed = 0, huts = 0; if (food.length > KN) food.length = KN; NAHA.food = food;
+  food.sort((a, b) => a.dd - b.dd); const KN = MOBILE ? 110 : 240, n = {}; for (const k of SHOP_KINDS) n[k] = 0; let placed = 0, huts = 0; if (food.length > KN) food.length = KN; NAHA.food = food;
   const H = INST.hut;
   for (const q of food) {
     if (!q.placed) { if (placed >= 30 || !shopTilesReady(q)) continue; placeShop(q); placed++; if (q.sp && q.lx !== undefined) dropPoi(q); }
@@ -135,17 +136,27 @@ function fmtTel(p) {
   if (/^098\d{7}$/.test(d)) return d.replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3');
   return d;
 }
+function copyText(text, btn) {      // to the clipboard, with a fallback for pages that are not allowed to use it
+  const done = (ok) => { const o = btn.textContent; btn.textContent = ok ? 'Copied ✓' : 'Could not copy'; setTimeout(() => { btn.textContent = o; }, 1600); };
+  const old = () => { let ok = false; try { const ta = document.createElement('textarea'); ta.value = text; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;left:-99px;top:0;opacity:0'; document.body.append(ta); ta.select(); ok = document.execCommand('copy'); ta.remove(); } catch (e) { ok = false; } done(ok); };
+  try { if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(() => done(true), old); else old(); } catch (e) { old(); }
+}
 function bizRows(q) {
-  const tel = fmtTel(q.tel);
+  const tel = fmtTel(q.tel), dial = String(q.tel || '').replace(/[^\d+]/g, ''), ll = xz2ll(q.x, q.z), at = ll[1].toFixed(6) + ',' + ll[0].toFixed(6), ext = { target: '_blank', rel: 'noopener noreferrer' };
+  const gmap = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(q.addr ? q.full + ' ' + q.addr : at);
+  const amap = 'https://maps.apple.com/?q=' + encodeURIComponent(q.full) + (q.addr ? '&address=' + encodeURIComponent(q.addr) : '&ll=' + at);
+  const copy = (label, text) => { const b = el('button', { type: 'button' }, label); b.addEventListener('click', () => copyText(text, b)); return b; };
   return el('div', { class: 'list' },
-    el('div', { class: 'item' }, el('span', { class: 'ic' }, '📍'), el('span', null, el('b', null, 'Address 住所'), el('div', null, q.addr || 'No address on record for this place.'))),
-    el('div', { class: 'item' }, el('span', { class: 'ic' }, '☎️'), el('span', null, el('b', null, 'Phone 電話'), el('div', null, tel ? el('a', { href: 'tel:' + String(q.tel).replace(/[^\d+]/g, '') }, tel) : 'No phone number on record for this place.'))));
+    el('div', { class: 'item' }, el('span', { class: 'ic' }, '📍'), el('span', null, el('b', null, 'Address 住所'), el('div', null, q.addr || 'No address on record for this place.'),
+      el('div', { class: 'links' }, q.addr ? copy('Copy address', q.addr) : null, el('a', Object.assign({ href: gmap }, ext), 'Google Maps ↗'), el('a', Object.assign({ href: amap }, ext), 'Apple Maps ↗')))),
+    el('div', { class: 'item' }, el('span', { class: 'ic' }, '☎️'), el('span', null, el('b', null, 'Phone 電話'), el('div', null, tel || 'No phone number on record for this place.'),
+      tel ? el('div', { class: 'links' }, copy('Copy number', tel), el('a', { href: 'tel:' + dial }, 'Dial 📞')) : null)));
 }
 const BIZ_SRC = 'Name, address and phone number are from Overture Maps open data, and can be out of date.';
 function openBiz(q) {      // tap a sign: the card for any shop, office, hotel or restaurant
   const K = q.kind && SHOP[q.kind];
   openModal(el('div', null, el('h2', { id: 'mTitle' }, q.full, el('small', null, K ? K.label : q.cat || 'Place')), bizRows(q),
-    K ? el('p', null, 'Walk up to its door and you can go inside.') : null, el('p', { class: 'src' }, BIZ_SRC)));
+    K ? el('p', null, q.kind === 'arcade' ? 'Walk up to its door and you can go inside: a claw game and gachapon are waiting.' : 'Walk up to its door and you can go inside.') : null, el('p', { class: 'src' }, BIZ_SRC)));
 }
 function shopMenu(q) { const m = SHOP[q.kind].menu.slice(), out = []; let s = q.id; while (out.length < 4 && m.length) { s = (Math.imul(s, 1103515245) + 12345) >>> 0; out.push(m.splice((s >>> 8) % m.length, 1)[0]); } return out; }
 function openShop(q) {      // at the counter
@@ -154,8 +165,8 @@ function openShop(q) {      // at the counter
     const f = DATA.foods[id]; if (!f) continue;
     const btn = el('button', { class: 'act', on: { click: () => {
       if (S.glass < price) { info.textContent = 'You need ' + price + ' Ryukyu glass. They float on the lagoon just offshore: ride through them.'; return; }
-      S.glass -= price; S.foods[id] = 1; P.buffT = 150; S.words.kwatchi = 1; S.words.nuchigusui = 1; save(); chefSay('Kwatchī sabira!');
-      info.textContent = ''; info.append(el('b', null, 'Kwatchī sabira! '), f[3] + ' You ride 15% faster for a while.'); ding(990, 1485); btn.disabled = true;
+      S.glass -= price; S.foods[id] = 1; P.buffT = 150; S.words.kwatchi = 1; S.words.nuchigusui = 1; bagGive(id, 1); save(); chefSay('Kwatchī sabira!');
+      info.textContent = ''; info.append(el('b', null, 'Kwatchī sabira! '), f[3] + ' You ride 15% faster for a while, and a second portion is in your bag.'); ding(990, 1485); btn.disabled = true;
       for (const sm of acts.querySelectorAll('small')) sm.textContent = price + ' Ryukyu glass · you have ' + S.glass;
     } } }, el('span', { class: 'ic' }, f[0]), el('span', null, el('b', null, f[1] + ' ' + f[2]), el('small', null, price + ' Ryukyu glass · you have ' + S.glass)));
     acts.append(btn);
@@ -169,6 +180,7 @@ let INSIDE = null;
 const inScene = new T.Scene(); inScene.background = new T.Color(0x191320);
 const IN = { mesh: null, pane: null, board: null, chef: null, bubble: null, bubbleT: 0, busy: false };
 function roomGeo(kind, seed) {
+  if (kind === 'arcade') return arcadeRoomGeo(seed);
   const C = SHOP[kind], ps = [], blocks = [], dark = 0x24304a, r = (k) => hash(seed % 9973, k, 77);
   const B = (w, h, d, c, p, o) => ps.push(part(gBox(w, h, d), c, Object.assign({ p }, o || {})));
   B(8.4, .3, 6.8, C.floor, [0, -.15, 0], { glow: .12 });
@@ -211,7 +223,7 @@ function roomGeo(kind, seed) {
   B(1.9, .03, 1.0, C.a, [0, .02, 2.8], { glow: .5 }); B(1.5, .035, .12, 0xffffff, [0, .03, 3.1], { glow: .9 });
   return { geo: merge(ps), blocks };
 }
-function chefSay(text) { if (IN.bubble) { IN.bubble.removeFromParent(); IN.bubble.material.map.dispose(); IN.bubble.material.dispose(); } IN.bubble = textSprite([text], { w: 384, h: 110, stroke: '#ff4fa3' }); IN.bubble.position.set(-1.6, 3.2, -2.7); IN.bubble.scale.set(2.9, .83, 1); IN.bubbleT = 4; inScene.add(IN.bubble); }
+function chefSay(text) { if (IN.bubble) { IN.bubble.removeFromParent(); IN.bubble.material.map.dispose(); IN.bubble.material.dispose(); } IN.bubble = textSprite([text], { w: 384, h: 110, stroke: '#ff4fa3' }); IN.bubble.position.set(IN.chef.position.x, 3.2, IN.chef.position.z); IN.bubble.scale.set(2.9, .83, 1); IN.bubbleT = 4; inScene.add(IN.bubble); }
 function buildRoom(q) {
   const R = roomGeo(q.kind, q.id); if (IN.mesh) { inScene.remove(IN.mesh); IN.mesh.geometry.dispose(); } IN.mesh = new T.Mesh(R.geo, objMat); IN.mesh.frustumCulled = false; inScene.add(IN.mesh);
   if (!IN.pane) { IN.pane = new T.Mesh(new T.PlaneGeometry(2.1, 1.26), new T.MeshBasicMaterial({ color: 0x8fd8ff })); IN.pane.position.set(2.3, 2.05, -3.19); inScene.add(IN.pane); }
@@ -223,6 +235,7 @@ function buildRoom(q) {
     IN.chef = makeIslander(3); const hat = new T.Mesh(merge([part(gCyl(.3, .26, .36, 10), 0xffffff, { p: [0, .5, 0], glow: .3 }), part(gSph(.33, 8, 6), 0xffffff, { p: [0, .72, 0], s: [1, .6, 1], glow: .3 })]), objMat); hat.frustumCulled = false; IN.chef.userData.parts.head.add(hat);
     IN.chef.position.set(-1.6, 0, -2.72); IN.chef.rotation.y = Math.PI; IN.chef.scale.setScalar(1);
   }
+  if (q.kind === 'arcade') { IN.chef.position.set(-3.25, 0, 1.6); IN.chef.rotation.y = -Math.PI / 2; } else { IN.chef.position.set(-1.6, 0, -2.72); IN.chef.rotation.y = Math.PI; }      // behind the counter, or behind the prize desk
   inScene.add(IN.chef); return R;
 }
 function enterShop(q) {
@@ -242,7 +255,7 @@ function leaveShop() {
   }, 300);
 }
 function insideAction() {
-  const I = INSIDE; if (I.z < -.2 && I.x < 1.4) return { label: 'Order at the counter', fn: () => openShop(I.q) };
+  const I = INSIDE; if (I.q.kind === 'arcade') { const a = arcadeSpot(I.x, I.z); if (a) return a; } else if (I.z < -.2 && I.x < 1.4) return { label: 'Order at the counter', fn: () => openShop(I.q) };
   return { label: 'Leave ' + (I.q.full.length > 16 ? 'this place' : I.q.full), fn: leaveShop };
 }
 function insideStep(dt, ix, iy) {
@@ -254,7 +267,7 @@ function insideStep(dt, ix, iy) {
   if (hit(nx, nz)) { if (!hit(nx, I.z)) nz = I.z; else if (!hit(I.x, nz)) nx = I.x; else { nx = I.x; nz = I.z; } }
   I.x = nx; I.z = nz;
   if (P.air) { P.vy -= 20 * dt; P.jy += P.vy * dt; if (P.jy <= 0) { P.jy = 0; P.air = false; } }
-  me.position.set(I.x, P.jy, I.z); me.rotation.set(0, -P.h, 0); poseIslander(me, 'land', P.craft, false, tNow, P.speed, { dt, air: P.air });
+  me.position.set(I.x, P.jy, I.z); me.rotation.set(0, -P.h, 0); poseIslander(me, 'land', P.craft, false, tNow, P.speed, poseOpt({ dt, air: P.air }));
   poseIslander(IN.chef, 'land', 'jetski', false, tNow + 1.3, IN.bubbleT > 3.2 ? 4 : 0, { dt });
   if (IN.bubble && (IN.bubbleT -= dt) <= 0) { IN.bubble.removeFromParent(); IN.bubble.material.map.dispose(); IN.bubble.material.dispose(); IN.bubble = null; }
   const sk = skyU.uMid.value; IN.pane.material.color.setRGB(Math.min(1, sk.x), Math.min(1, sk.y), Math.min(1, sk.z));

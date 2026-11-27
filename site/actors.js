@@ -100,11 +100,26 @@ function makeIslander(colorIdx) {
   for (const k in rides) { rides[k].visible = false; rides[k].frustumCulled = false; g.add(rides[k]); }
   g.userData = { parts, rides, a: { ph: 0 } }; g.scale.setScalar(PS); scene.add(g); return g;
 }
+/* Emotes are a speech bubble plus a little performance. Each pose gives only the parts it moves; the rest keep idling. */
+const EMOTES = ['Haisai! 👋', 'Māsan! 😋', 'Chura! ✨', 'Nifē dēbiru 🙇', 'Kachāshī! 💃', 'Chibariyō! 💪', 'Karate! 🥋', 'Sanshin ♪ 🎶', 'Kanasandō 💗'];
+const EMOTE_WORD = ['haisai', 'maasan', 'churasan', 'nifee', 'kachashi', 'chibariyo', null, null, null], EMOTE_DUR = [2.4, 2.6, 2.4, 2.2, 6.5, 2.6, 3, 6, 2.8], USE_DUR = [0, 2.6, 3.4, 2.6];
+function emotePose(i, t) {
+  const s = Math.sin, c = Math.cos, A = Math.abs;
+  if (i === 0) return { hr: [.66 + s(t * 11) * .2, 1.66, -.06], tilt: s(t * 5.5) * .1, by: .72 + A(s(t * 5.5)) * .05 };      // a big wave
+  if (i === 1) return { hl: [-.12 + c(t * 9) * .13, .7 + s(t * 9) * .1, -.38], hr: [.2, 1.24, -.42], tilt: s(t * 4.5) * .13, hy: 1.44 + A(s(t * 9)) * .04, hrx: .1 };      // delicious: rubbing the tummy
+  if (i === 2) { const k = Math.min(1, t / 1.3), e = k * k * (3 - 2 * k); return { hl: [-.8, 1.5 + s(t * 6) * .08, -.05], hr: [.8, 1.5 - s(t * 6) * .08, -.05], yaw: e * 6.2832, whole: 1, sy: 1.12, by: .8, hy: 1.58, fl: [-.12, .12, 0], fr: [.14, .3, -.1] }; }      // beautiful: a twirl with arms wide
+  if (i === 3) { const b = s(Math.min(1, t / 2.0) * Math.PI), e = b * b * (3 - 2 * b); return { trx: -.75 * e, bz: -.1 * e, hy: 1.44 - .46 * e, hz: -.6 * e, hrx: -.9 * e, hl: [-.42, .78 - .18 * e, -.34 * e], hr: [.42, .78 - .18 * e, -.34 * e] }; }      // thank you: a deep bow
+  if (i === 4) { const q = t * 7.5, a = s(q); return { hl: [-.4 + a * .14, 1.74 + c(q) * .08, -.12 + a * .26], hr: [.4 + a * .14, 1.74 - c(q) * .08, -.12 - a * .26], fl: [-.22, .12 + Math.max(0, a) * .18, -.04], fr: [.22, .12 + Math.max(0, -a) * .18, -.04], by: .72 + A(a) * .1, hy: 1.44 + A(s(q - .5)) * .12, tilt: s(q * .5) * .16, hx: s(q * .5) * .1, trz: s(q * .5) * .16, yaw: s(t * 1.2) * .55 }; }      // kachāshī: the festival dance, hands turning overhead
+  if (i === 5) { const j = A(s(t * 8.5)); return { hr: [.36, 1.55 + j * .42, -.12], hl: [-.5, .98, -.2], by: .72 + j * .22, hy: 1.44 + j * .27, fl: [-.2, .12 + j * .2, 0], fr: [.2, .12 + j * .2, 0], sy: 1 + (j - .4) * .26 }; }      // go for it: jumping with a fist in the air
+  if (i === 6) { const q = t * 5.2, pr = Math.sqrt(Math.max(0, s(q))), pl = Math.sqrt(Math.max(0, -s(q))); return { by: .6, hy: 1.3, fl: [-.42, .12, .12], fr: [.42, .12, -.14], hl: [-.3 + pl * .14, .86 + pl * .2, -.05 - pl * .74], hr: [.3 - pr * .14, .86 + pr * .2, -.05 - pr * .74], hry: (pl - pr) * .22, trz: 0 }; }      // karate was born here: a low stance and straight punches
+  if (i === 7) { const q = t * 9; return { hl: [-.66, 1.18 + s(t * 2) * .03, -.22], hr: [.14 + s(q) * .06, .8 + s(q) * .1, -.38], tilt: s(t * 2.2) * .14, hx: s(t * 2.2) * .06, by: .72 + A(s(t * 2.2)) * .04, fl: [-.2, .12 + Math.max(0, s(t * 4.4)) * .09, 0] }; }      // playing an air sanshin
+  const o = Math.max(0, Math.min(1, (t - .8) / .6)); return { hl: [-.1 - o * .5, 1.02 + o * .64, -.36 + o * .1], hr: [.1 + o * .5, 1.02 + o * .64, -.36 + o * .1], hy: 1.44 + o * .06, tilt: s(t * 4) * .08 * o, sy: 1 + o * .08 };      // I love you: hands on the heart, then thrown wide
+}
 function poseIslander(g, mode, craft, diving, t, speed, opt) {
   const u = g.userData, p = u.parts, a = u.a, dt = (opt && opt.dt) || .016, ride = mode === 'land' && opt && LAND[opt.ride] ? opt.ride : null, biking = ride === 'bike', air = !!(opt && opt.air), tow = mode === 'sea' && opt && TOW[opt.tow] ? opt.tow : null;
   for (const k of TOW_KINDS) u.rides[k].visible = tow === k;
   for (const k of CRAFTS) u.rides[k].visible = mode === 'sea' && k === craft && !diving && !tow; for (const k in LAND) u.rides[k].visible = ride === k; u.rides.plane.visible = mode === 'air'; if (mode === 'air') u.rides.plane.userData.prop.rotation.z = t * 38;
-  const br = Math.sin(t * 2.2) * .025; let by = .72, bz = 0, hy = 1.44, hz = 0, sy = 1, tilt = 0, ox = 0;
+  const br = Math.sin(t * 2.2) * .025; let by = .72, bz = 0, hy = 1.44, hz = 0, hx = 0, sy = 1, tilt = 0, ox = 0, trx = diving ? -1.35 : 0, trY = 0, trz = 0, hrx = diving ? -1.2 : 0, hry = 0, yaw = 0;
   let hl = [-.52, .78, 0], hr = [.52, .78, 0], fl = [-.2, .12, 0], fr = [.2, .12, 0];
   if (mode === 'air') { by = 1.5 + br; bz = .35; hy = by + .7; hz = bz - .04; hl = [-.3, 1.55, -.2]; hr = [.3, 1.55, -.2]; fl = [-.2, 1.1, .1]; fr = [.2, 1.1, .1]; }
   else if (diving) {      // swimming flat, kicking
@@ -126,16 +141,32 @@ function poseIslander(g, mode, craft, diving, t, speed, opt) {
     else if (craft === 'jetski') { hl = [-.4, 1.06, -.5]; hr = [.4, 1.06, -.5]; fl = [-.42, .5, .3]; fr = [.42, .5, .3]; }
     else { hl = [-.5, .85 + br, .9]; hr = [.5, .85 + br, .9]; fl = [-.2, .5, .75]; fr = [.2, .5, .75]; }
   } else if (mode === 'sit') { by = .42 + br; hy = 1.1 + br * 1.5; hl = [-.5, .3, -.1]; hr = [.5, .3, -.1]; fl = [-.22, .12, -.5]; fr = [.22, .12, -.5]; }
-  else {      // on foot: every step is a bounce, with squash and stretch
-    const k = Math.min(1, speed / 3); if (speed > .3) a.ph += dt * (7 + speed * .9); else a.ph += (Math.round(a.ph / Math.PI) * Math.PI - a.ph) * Math.min(1, dt * 10);
-    const s = Math.sin(a.ph), c = Math.cos(a.ph), hop = Math.abs(s), hop2 = Math.abs(Math.sin(a.ph - .55));
-    by = .72 + hop * .24 * k + br; sy = 1 + (hop - .45) * .34 * k + br; hy = 1.44 + hop2 * .34 * k + br * 1.6; tilt = s * .1 * k;
-    fl = [-.2, .12 + Math.max(0, c) * .3 * k, -s * .36 * k]; fr = [.2, .12 + Math.max(0, -c) * .3 * k, s * .36 * k];
-    hl = [-.52 - hop * .08 * k, .78 + hop2 * .2 * k + br, s * .42 * k]; hr = [.52 + hop * .08 * k, .78 + hop2 * .2 * k + br, -s * .42 * k];
-    if (air) { sy = 1.28; hy += .12; hl[1] += .45; hr[1] += .45; fl[1] += .1; fr[1] += .1; }
+  else {      // on foot: a big rolling stride. The weight swings from side to side, the head trails the body, the arms swing in high arcs
+    const k = Math.min(1, speed / 3); if (speed > .3) a.ph += dt * (5.6 + speed * .62); else a.ph += (Math.round(a.ph / Math.PI) * Math.PI - a.ph) * Math.min(1, dt * 10);
+    const s = Math.sin(a.ph), c = Math.cos(a.ph), hop = Math.abs(s), s2 = Math.sin(a.ph - .7), hop2 = Math.abs(s2), sway = c * .14 * k;
+    by = .72 + hop * .36 * k + br; sy = 1 + (hop - .45) * .44 * k + br; ox = sway; bz = -.1 * k; trz = -c * .24 * k; trY = s * .3 * k;
+    hy = 1.44 + hop2 * .46 * k + br * 1.6; hx = Math.cos(a.ph - .9) * .1 * k - sway * .4; hz = -.24 * k + s2 * .06 * k; tilt = Math.sin(a.ph - .5) * .22 * k; hry = -s * .14 * k;
+    fl = [-.2 - sway * .5, .12 + Math.max(0, c) * .48 * k, -s * .64 * k]; fr = [.2 - sway * .5, .12 + Math.max(0, -c) * .48 * k, s * .64 * k];
+    hl = [-.54 + Math.max(0, -s) * .22 * k - sway, .74 + Math.abs(s) * .38 * k + br, s * .74 * k]; hr = [.54 - Math.max(0, s) * .22 * k - sway, .74 + Math.abs(s) * .38 * k + br, -s * .74 * k];
+    const E = opt && opt.emote;
+    if (air) { sy = 1.22; ox = 0; bz = 0; by = .8; hy = 1.62; hx = 0; hz = 0; tilt = 0; trz = trY = hry = 0; hl = [-.24, 2.0, -.06]; hr = [.24, 2.0, -.06]; fl = [-.06, .02, .02]; fr = [.15, .54, -.14]; }      // a pirouette: arms up, one foot tucked
+    else if (E && speed < 1.5 && E[1] < (EMOTE_DUR[E[0]] || 0)) {      // standing still and saying something with the whole body
+      const D = EMOTE_DUR[E[0]], w = Math.min(1, E[1] * 6, (D - E[1]) * 5), q = emotePose(E[0], E[1]), mx = (a0, b0) => [lerp(a0[0], b0[0], w), lerp(a0[1], b0[1], w), lerp(a0[2], b0[2], w)];
+      if (q.hl) hl = mx(hl, q.hl); if (q.hr) hr = mx(hr, q.hr); if (q.fl) fl = mx(fl, q.fl); if (q.fr) fr = mx(fr, q.fr);
+      if (q.by !== undefined) by = lerp(by, q.by, w); if (q.hy !== undefined) hy = lerp(hy, q.hy, w); if (q.hz !== undefined) hz = lerp(hz, q.hz, w); if (q.hx !== undefined) hx = lerp(hx, q.hx, w); if (q.bz !== undefined) bz = lerp(bz, q.bz, w);
+      if (q.sy !== undefined) sy = lerp(sy, q.sy, w); if (q.tilt !== undefined) tilt = lerp(tilt, q.tilt, w); if (q.trx !== undefined) trx = q.trx * w; if (q.trz !== undefined) trz = q.trz * w; if (q.hrx !== undefined) hrx = q.hrx * w; if (q.hry !== undefined) hry = q.hry * w; if (q.yaw !== undefined) yaw = q.yaw * (q.whole ? 1 : w);
+    }
   }
-  const sx = 1 / Math.sqrt(sy); p.torso.position.set(ox, by, bz); p.torso.scale.set(sx, sy, sx); p.torso.rotation.x = diving ? -1.35 : 0;
-  p.head.position.set(ox + tilt * .3, hy, hz); p.head.rotation.set(diving ? -1.2 : 0, 0, tilt);
+  const Q = opt && opt.use;      // using what is in the right hand, whatever you are riding: 1 eat, 2 blow bubbles, 3 hold it up and wave
+  if (Q && Q[1] < USE_DUR[Q[0]]) {
+    const ut = Q[1], w = Math.min(1, ut * 7, (USE_DUR[Q[0]] - ut) * 6), bite = .5 + .5 * Math.sin(ut * 9);
+    const tg = Q[0] === 1 ? [.12, hy - .34 + bite * .14, hz - .44] : Q[0] === 2 ? [.2, hy - .26, hz - .5] : [.56 + Math.sin(ut * 10) * .22, hy + .3, hz - .06];
+    hr = [lerp(hr[0], tg[0], w), lerp(hr[1], tg[1], w), lerp(hr[2], tg[2], w)]; if (Q[0] === 1) hrx += Math.sin(ut * 9) * .07 * w;
+  }
+  if (opt && opt.spin) { const e = opt.spin * opt.spin * (3 - 2 * opt.spin); yaw -= e * Math.PI * 2; }      // the 360 in a jump: the rider and the ride turn together
+  if (yaw) g.rotation.y += yaw;
+  const sx = 1 / Math.sqrt(sy); p.torso.position.set(ox, by, bz); p.torso.scale.set(sx, sy, sx); p.torso.rotation.set(trx, trY, trz);
+  p.head.position.set(ox + hx + tilt * .3, hy, hz); p.head.rotation.set(hrx, hry, tilt);
   p.handL.position.set(ox + hl[0], hl[1], hl[2]); p.handR.position.set(ox + hr[0], hr[1], hr[2]); p.footL.position.set(ox + fl[0], fl[1], fl[2]); p.footR.position.set(ox + fr[0], fr[1], fr[2]);
 }
 
@@ -279,14 +310,14 @@ function upsertRemote(id, s) {
   let r = remotes.get(id);
   if (!r || r.color !== s.c || r.nk !== s.nk) {
     if (r) { r.g.removeFromParent(); r.label.removeFromParent(); }
-    r = { g: makeIslander(s.c), label: textSprite([nickOf(s.n)], { w: 384, h: 96, stroke: '#8fe01f' }), color: s.c, nk: s.nk, x: s.x, z: s.z, y: s.y, h: s.h, bubble: null, et: 0 };
+    r = { g: makeIslander(s.c), label: textSprite([nickOf(s.n)], { w: 384, h: 96, stroke: '#8fe01f' }), color: s.c, nk: s.nk, x: s.x, z: s.z, y: s.y, h: s.h, bubble: null, et: 0, j: s.j, u: s.u, spinT: 9, useAt: -99, use: 0, emoteAt: -99, e: 0 };
     scene.add(r.label); remotes.set(id, r);
   }
   r.tx = s.x; r.tz = s.z; r.ty = s.y; r.th = s.h; r.mode = s.m === 5 ? 'air' : s.m === 0 || s.m === 4 || (s.m >= 6 && s.m <= 8) ? 'land' : 'sea'; r.ride = s.m === 4 ? 'bike' : s.m === 6 ? 'kart' : s.m === 7 ? 'kei' : null; r.in = s.m === 8 ? s.i : 0; r.tow = s.m >= 9 ? TOW_KINDS[s.m - 9] : null; r.tix = s.ix; r.tiz = s.iz; r.craft = CRAFTS[clamp(s.m - 1, 0, 2)] || 'jetski'; r.diving = !!s.d; r.name = nickOf(s.n);
-  if (s.et && s.et !== r.et) { r.et = s.et; if (r.bubble) scene.remove(r.bubble); r.bubble = textSprite([EMOTES[s.e] || EMOTES[0]], { w: 384, h: 110, stroke: '#ff4fa3' }); r.bubbleT = 4; (r.g.parent || scene).add(r.bubble); }
+  r.q = s.q; if (s.j && s.j !== r.j) { r.j = s.j; r.spinT = 0; r.spinDur = s.m === 0 ? .72 : .85; } if (s.u && s.u !== r.u) { r.u = s.u; r.use = s.uk; r.useNew = 1; }
+  if (s.et && s.et !== r.et) { r.et = s.et; r.e = s.e; r.emoteNew = 1; if (r.bubble) scene.remove(r.bubble); r.bubble = textSprite([EMOTES[s.e] || EMOTES[0]], { w: 384, h: 110, stroke: '#ff4fa3' }); r.bubbleT = 4; (r.g.parent || scene).add(r.bubble); }
   return r;
 }
-const EMOTES = ['Haisai! 👋', 'Māsan! 😋', 'Chura! ✨'];
 function dropRemote(id) { const r = remotes.get(id); if (!r) return; r.g.removeFromParent(); r.label.removeFromParent(); if (r.bubble) r.bubble.removeFromParent(); remotes.delete(id); }
 function updateRemotes(dt, t) {
   for (const r of remotes.values()) {
@@ -298,7 +329,9 @@ function updateRemotes(dt, t) {
     let sp = far ? 0 : Math.hypot(r.tx - r.x, r.tz - r.z) * 8;
     if (here) { sp = Math.hypot(r.tix - r.ix, r.tiz - r.iz) * 8; r.ix = lerp(r.ix, r.tix, k); r.iz = lerp(r.iz, r.tiz, k); r.g.position.set(r.ix, 0, r.iz); } else r.g.position.set(r.x - OX, r.y, r.z - OZ);
     r.g.rotation.y = -r.h; const gp = r.g.position;
-    poseIslander(r.g, here ? 'land' : r.mode, r.craft, r.diving, t, here ? sp : sp / PS, { dt, ride: here ? null : r.ride, tow: here ? null : r.tow });
+    if (r.emoteNew) { r.emoteNew = 0; r.emoteAt = t; } if (r.useNew) { r.useNew = 0; r.useAt = t; } const spin = r.spinT < r.spinDur ? (r.spinT += dt, Math.min(1, r.spinT / r.spinDur)) : 0, ut = t - r.useAt;
+    setGear(r.g, r.q || GEAR_NONE); if (r.use && ut < USE_DUR[r.use]) useFx(r.g, r.use, ut, dt, r.g.parent);
+    poseIslander(r.g, here ? 'land' : r.mode, r.craft, r.diving, t, here ? sp : sp / PS, { dt, ride: here ? null : r.ride, tow: here ? null : r.tow, spin, air: spin > 0, emote: [r.e, t - r.emoteAt], use: r.use ? [r.use, ut] : null });
     r.label.position.set(gp.x, gp.y + 3.1 * up, gp.z); r.label.scale.set(2.6 * up, .65 * up, 1);
     if (r.bubble) { r.bubbleT -= dt; r.bubble.position.set(gp.x, gp.y + 4.1 * up, gp.z); r.bubble.scale.set(3.2 * up, .92 * up, 1); if (r.bubbleT <= 0) { r.bubble.removeFromParent(); r.bubble = null; } }
   }

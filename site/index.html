@@ -53,6 +53,14 @@ button:focus-visible{outline:3px solid #fff;outline-offset:2px}
 #loc b{font-weight:800} #loc small{display:block;color:var(--ink-soft);font-size:11px;font-variant-numeric:tabular-nums}
 #mini{width:104px;height:104px;border-radius:50%;border:2px solid rgba(255,255,255,.95);
   box-shadow:0 6px 16px rgba(5,40,110,.4),inset 0 0 12px rgba(255,255,255,.5)}
+#mini{cursor:pointer;touch-action:none;transition:width .16s ease,height .16s ease}
+#miniBox{display:flex;flex-direction:column;gap:6px;align-items:stretch}
+#miniBox.big #mini{width:min(300px,62vw,50vh);height:min(300px,62vw,50vh)}
+.tl.front{z-index:6;max-width:none}
+#miniZoomRow{display:flex;align-items:center;gap:8px;padding:3px 12px;border-radius:999px;font-weight:800;font-size:15px;line-height:1}
+#miniZoomRow[hidden]{display:none}
+#miniZoom{flex:1;min-width:0;height:22px;margin:0;accent-color:#19a8ff;cursor:pointer}
+@media (prefers-reduced-motion:reduce){#mini{transition:none}}
 .tr{right:12px;top:12px;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;max-width:40vw}
 .tc{left:50%;top:12px;transform:translateX(-50%);display:flex;flex-direction:column;gap:6px;align-items:center;pointer-events:none!important}
 #target{font-size:12px;max-width:44vw;overflow:hidden;text-overflow:ellipsis}
@@ -80,6 +88,28 @@ button:focus-visible{outline:3px solid #fff;outline-offset:2px}
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #emotes{right:14px;top:74px;display:flex;flex-direction:column;gap:6px;align-items:flex-end}
 #emotes button{font-size:12px;font-weight:800}
+#emoGrid{display:grid;grid-template-columns:auto auto;gap:5px;justify-items:stretch} #emoGrid[hidden]{display:none}
+#bUse{border-color:#ff4fa3;box-shadow:0 0 0 2px rgba(255,79,163,.45)}
+.act.on{outline:3px solid #ff4fa3;outline-offset:-3px}
+.links{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.links a,.links button{font:inherit;font-size:12px;font-weight:800;padding:5px 11px;border-radius:999px;border:1.5px solid #9fc4ee;background:#fff;color:#0b4fb8;text-decoration:none;cursor:pointer}
+.links a:hover,.links button:hover{background:#e6f3ff} .links a:focus-visible,.links button:focus-visible{outline:3px solid #ff4fa3;outline-offset:1px}
+.game{display:flex;flex-direction:column;align-items:center;gap:10px;margin-top:10px}
+.game canvas{width:min(100%,320px);height:auto;border-radius:14px;border:3px solid #24304a;background:#10162a;touch-action:none}
+.cpad{display:flex;gap:10px;justify-content:center;align-items:center;flex-wrap:wrap}
+.cpad button{font:inherit;font-weight:800;font-size:16px;min-width:64px;height:50px;line-height:1;padding:0 16px;flex:none;border-radius:14px;border:2px solid #24304a;background:#fff;color:#24304a;cursor:pointer;touch-action:none;user-select:none;-webkit-user-select:none}
+.cpad button:active,.cpad button.down{background:#ffe14a} .cpad button.go{background:#ff4fa3;color:#fff;border-color:#a8125f} .cpad button:disabled{opacity:.45;cursor:default}
+.gacha{position:relative;width:200px;height:270px;margin:0 auto}
+.gacha .dome{position:absolute;left:20px;top:0;width:160px;height:150px;border-radius:80px 80px 16px 16px;background:linear-gradient(160deg,rgba(255,255,255,.75),rgba(190,230,255,.45));border:3px solid #24304a;overflow:hidden}
+.gacha .dome i{position:absolute;width:38px;height:38px;border-radius:50%;border:2px solid rgba(36,48,74,.55);background:linear-gradient(180deg,rgba(255,255,255,.9) 0 50%,var(--c) 50% 100%)}
+.gacha .box{position:absolute;left:10px;top:142px;width:180px;height:128px;border-radius:14px;background:linear-gradient(180deg,#ff6b6b,#d62f4a);border:3px solid #24304a}
+.gacha .knob{position:absolute;left:66px;top:164px;width:68px;height:68px;border-radius:50%;background:#fff;border:3px solid #24304a;cursor:pointer;padding:0;transition:transform .45s cubic-bezier(.3,1.4,.5,1)}
+.gacha .knob::after{content:"";position:absolute;left:8px;right:8px;top:27px;height:10px;border-radius:5px;background:#24304a}
+.gacha .slot{position:absolute;left:20px;top:238px;width:54px;height:26px;border-radius:8px;background:#24304a}
+.gacha .cap{position:absolute;left:28px;top:232px;width:38px;height:38px;border-radius:50%;border:2px solid #24304a;background:linear-gradient(180deg,#fff 0 50%,var(--c) 50% 100%);animation:capdrop .5s cubic-bezier(.3,1.5,.5,1)}
+@keyframes capdrop{from{transform:translateY(-70px) rotate(-200deg);opacity:0}to{transform:none;opacity:1}}
+.prize{font-size:54px;line-height:1;text-align:center;animation:pop .45s cubic-bezier(.2,1.6,.4,1)}
+@media (prefers-reduced-motion:reduce){.gacha .knob{transition:none}.gacha .cap,.prize{animation:none}}
 #toast{position:fixed;left:50%;top:88px;transform:translateX(-50%);display:flex;flex-direction:column;gap:6px;align-items:center;pointer-events:none;width:min(92vw,460px)}
 #toast div{border-radius:16px;padding:8px 16px;font-size:14px;text-align:center;animation:pop .35s cubic-bezier(.2,1.6,.4,1)}
 #toast b{font-weight:800}
@@ -197,7 +227,10 @@ body.gba #fade{background:#5890d8;font-family:var(--display)}
 <div id="hud" hidden>
   <div class="tl">
     <div id="loc" class="glass pill"><b>—</b><small>—</small></div>
-    <canvas id="mini" width="208" height="208" aria-label="Minimap"></canvas>
+    <div id="miniBox">
+      <canvas id="mini" width="208" height="208" role="button" aria-label="Minimap. Hover or tap to enlarge"></canvas>
+      <label id="miniZoomRow" class="glass" hidden><span aria-hidden="true">−</span><input id="miniZoom" type="range" min="0" max="100" step="1" value="53" aria-label="Map zoom"><span aria-hidden="true">+</span></label>
+    </div>
   </div>
   <div class="tc">
     <div id="target" class="glass pill"><i>▲</i><span>—</span></div>
@@ -210,9 +243,10 @@ body.gba #fade{background:#5890d8;font-family:var(--display)}
     <button class="bubble lime" id="bSnd" aria-label="Sound on or off" title="Sound"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10v4h4l5 4V6L8 10z"/><path id="sndw" d="M16.5 9a4 4 0 010 6M19 6.5a8 8 0 010 11"/></svg></button>
   </div>
   <div id="emotes">
-    <button class="glass pill" data-e="0">Haisai! 👋</button>
-    <button class="glass pill" data-e="1">Māsan! 😋</button>
-    <button class="glass pill" data-e="2">Chura! ✨</button>
+    <button class="glass pill" id="bEmo" aria-expanded="false" aria-controls="emoGrid" title="Emotes (T)">😊 Emotes</button>
+    <div id="emoGrid" hidden></div>
+    <button class="glass pill" id="bBag" title="Bag (I)">🎒 Bag</button>
+    <button class="glass pill" id="bUse" title="Use what you hold (Q)" hidden>Use</button>
   </div>
   <div class="stats glass">
     <div class="row"><span class="orb"></span><b id="glass">0</b><span>Ryukyu glass</span></div>
@@ -269,6 +303,8 @@ body.gba #fade{background:#5890d8;font-family:var(--display)}
 <script src="sports.js"></script>
 <script src="traffic.js"></script>
 <script src="kit.js"></script>
+<script src="bag.js"></script>
+<script src="arcade.js"></script>
 <script src="ui.js"></script>
 </body>
 </html>

@@ -68,7 +68,7 @@ addEventListener('keydown', (e) => {
   if (!started) return;
   if (e.code === 'Escape' && modalOpen) closeModal();
   if (modalOpen) return;
-  if (e.code === 'KeyE') doAction(); if (e.code === 'KeyM') openMap(); if (e.code === 'KeyP') openPassport(); if (e.code === 'Space') { e.preventDefault(); jump(); }
+  if (e.code === 'KeyE') doAction(); if (e.code === 'KeyM') openMap(); if (e.code === 'KeyP') openPassport(); if (e.code === 'KeyI') openBag(); if (e.code === 'KeyQ') useItem(); if (e.code === 'KeyT') toggleEmotes(); if (e.code === 'Space') { e.preventDefault(); jump(); }
   if (INSIDE || P.tow) return;
   if (e.code === 'KeyF') toggleFly();
   if (P.mode === 'land' && !P.fly) { if (e.code === 'KeyB' || e.code === 'Digit1') setLand('bike'); if (e.code === 'KeyK' || e.code === 'Digit2') setLand('kart'); if (e.code === 'KeyC' || e.code === 'Digit3') setLand('kei'); }
@@ -141,11 +141,14 @@ function flyStep(dt, ix, iy) {
 function inspectAt(x, y) { if (INSIDE) return; const r = nahaPick(x, y); if (r && r.poi) openBiz(r.poi); else if (r) toast(r.title, r.text); }
 function applyStyle() { document.body.classList.toggle('gba', S.gba !== false); $('#style').textContent = 'Menu style: ' + (S.gba !== false ? 'Pixel' : 'Aero'); }
 function sayEmote(i) {
-  P.emote = i; P.emoteT = Date.now(); if (myBubble) myBubble.removeFromParent();
-  myBubble = textSprite([EMOTES[i]], { w: 384, h: 110, stroke: '#ff4fa3' }); myBubbleT = 4; (INSIDE ? inScene : scene).add(myBubble); if (i === 0) learn('haisai'); if (i === 1) learn('maasan'); if (i === 2) learn('churasan'); pluck(5 - i, .3);
+  if (!(i >= 0 && i < EMOTES.length)) return; P.emote = i; P.emoteT = Date.now(); P.emoteAt = tNow; if (myBubble) myBubble.removeFromParent();
+  myBubble = textSprite([EMOTES[i]], { w: 384, h: 110, stroke: '#ff4fa3' }); myBubbleT = 4; (INSIDE ? inScene : scene).add(myBubble); if (EMOTE_WORD[i]) learn(EMOTE_WORD[i]); if (i === 7 && AC) [0, 2, 4, 5, 4, 2, 3, 5, 4, 2, 0].forEach((n, k) => pluck(n, .4, AC.currentTime + .3 + k * .45)); else pluck((11 - i) % 6, .3);
 }
-function canHop() { return started && !chill && !INSIDE && !P.fly && !P.diving && P.mode === 'land' && (P.land === 'bike' || P.land === 'kart'); }      // bunny hops are for the bicycle and the go-kart
-function jump() { if (!canHop() || modalOpen || P.air) return; P.air = true; P.vy = 8.5 * PS; P.spin = 0; }      // 8.5 m/s up: about 1.8 m, twice the old hop
+function canHop() { return started && !chill && !INSIDE && !P.fly && !P.diving && !P.tow && (P.mode === 'land' ? P.land !== 'kei' : P.craft === 'jetski'); }      // on foot, bicycle, go-kart and jet ski; not the kei car
+function jump() {      // every jump is a full 360: a pirouette on foot, a spin on the ride
+  if (!canHop() || modalOpen || P.air) return; const foot = P.mode === 'land' && !LAND[P.land], v = (foot ? 7.2 : 8.5) * PS;
+  P.air = true; P.vy = v; P.spin = 1; P.airT = 0; P.airDur = 2 * v / (20 * PS); P.jumpStamp = Date.now(); if (foot) pluck(4, .18);
+}
 
 function collectFloats() {      // ride through a glowing glass float to pick it up
   const now = performance.now();
@@ -215,7 +218,7 @@ function updatePlayer(dt) {
   if (P.diving) base = lerp(P.y, Math.max(gh + .9, -2.2), dt * 3);
   else if (P.mode === 'sea') base = Math.max(surf, gh + .12);
   else base = gh;
-  if (P.air) { P.vy -= 20 * PS * dt; P.jy += P.vy * dt; if (P.jy <= 0) { P.jy = 0; P.air = false; P.spin = 0; if (P.mode === 'sea') { splash(P.x - OX, P.z - OZ, 22, 6); splashSfx(.3); } } }
+  if (P.air) { P.airT = (P.airT || 0) + dt; P.vy -= 20 * PS * dt; P.jy += P.vy * dt; if (P.jy <= 0) { P.jy = 0; P.air = false; P.spin = 0; if (P.mode === 'sea') { splash(P.x - OX, P.z - OZ, 22, 6); splashSfx(.3); } } }
   P.y = base + P.jy;
   // wake
   if (P.mode === 'sea' && !P.diving && !P.air && P.speed > 5) {
@@ -228,14 +231,13 @@ function updatePlayer(dt) {
   if (P.mode === 'sea' && !P.diving) {
     const e = 1.2, rx = P.x - OX, rz = P.z - OZ, fwd = waveH(rx + Math.sin(P.h) * e, rz - Math.cos(P.h) * e, tNow) - waveH(rx - Math.sin(P.h) * e, rz + Math.cos(P.h) * e, tNow);
     me.rotation.x = clamp(fwd * .35 + (P.air ? P.vy * .03 : 0) + (boosting ? .08 : 0), -.5, .5); me.rotation.z = -(P.lean || 0);
-    if (P.spin) me.rotation.y = -P.h + (1 - Math.max(0, P.vy + 7.5) / 15) * Math.PI * 2;
   }
   const onRide = P.mode === 'land' && !chill && LAND[P.land] ? P.land : null;
   if (onRide) {      // wheels follow the slope; the bicycle leans into a turn, the cars roll out of it
     const e = 1.2 * PS, sl = groundAt(P.x + Math.sin(P.h) * e, P.z - Math.cos(P.h) * e) - groundAt(P.x - Math.sin(P.h) * e, P.z + Math.cos(P.h) * e);
     P.pitch = lerp(P.pitch || 0, P.air ? 0 : clamp(Math.atan2(sl, 2.4 * PS), -.5, .5), dt * 8); me.rotation.x = P.pitch; me.rotation.z = onRide === 'bike' ? -(P.lean || 0) : (P.lean || 0) * .3;
   }
-  poseIslander(me, chill ? 'sit' : P.mode, P.craft, P.diving, tNow, P.speed / PS, { dt, ride: onRide, air: P.air });
+  poseIslander(me, chill ? 'sit' : P.mode, P.craft, P.diving, tNow, P.speed / PS, poseOpt({ dt, ride: onRide, air: P.air, spin: P.air && P.spin ? clamp(P.airT / P.airDur, 0, 1) : 0 }));
   if (engineGain) { const car = onRide === 'kart' || onRide === 'kei', on = ((P.mode === 'sea' && P.craft === 'jetski' && !P.diving) || (car && P.speed > .5)) && !S.muted; engineGain.gain.value = lerp(engineGain.gain.value, on ? .012 + Math.min(.05, P.speed * .0018) : 0, .1); engineOsc.frequency.value = (P.mode === 'land' && P.land === 'kei' ? 38 : 46) + P.speed / PS * (P.mode === 'land' && P.land === 'kei' ? 2 : 3.2); }
   collectFloats();
   // sea life
@@ -290,8 +292,8 @@ function openPlace(p) {
     const f = DATA.foods[p.food], price = 2;
     const btn = el('button', { class: 'act', on: { click: () => {
       if (S.glass < price) { info.textContent = 'You need ' + price + ' Ryukyu glass. They float on the lagoon just offshore: ride through them.'; return; }
-      S.glass -= price; S.foods[p.food] = 1; P.buffT = 150; S.words.kwatchi = 1; S.words.nuchigusui = 1; save();
-      info.textContent = ''; info.append(el('b', null, 'Kwatchī sabira! '), f[3] + ' You ride 15% faster for a while.'); ding(990, 1485); btn.disabled = true;
+      S.glass -= price; S.foods[p.food] = 1; P.buffT = 150; S.words.kwatchi = 1; S.words.nuchigusui = 1; bagGive(p.food, 1); save();
+      info.textContent = ''; info.append(el('b', null, 'Kwatchī sabira! '), f[3] + ' You ride 15% faster for a while, and a second portion is in your bag.'); ding(990, 1485); btn.disabled = true;
     } } }, el('span', { class: 'ic' }, f[0]), el('span', null, el('b', null, 'Eat ' + f[1] + ' ' + f[2]), el('small', null, price + ' Ryukyu glass · you have ' + S.glass)));
     acts.append(btn);
   }
@@ -349,7 +351,7 @@ function openMap(region, sel) {
 let hudT = 0, curMuni = '';
 const mini = $('#mini'), mc = mini.getContext('2d');
 function updateHud(dt) {
-  hudT -= dt; const a = currentAction(), ab = $('#act'); ab.hidden = !a; if (a && ab.textContent !== a.label) ab.textContent = a.label; syncRideButtons(); const hb = $('#bJump'), ch = canHop(); if (hb.hidden === ch) hb.hidden = !ch;
+  hudT -= dt; const a = currentAction(), ab = $('#act'); ab.hidden = !a; if (a && ab.textContent !== a.label) ab.textContent = a.label; syncRideButtons(); const hb = $('#bJump'), ch = canHop(); if (hb.hidden === ch) hb.hidden = !ch; const jl = P.mode === 'land' && !LAND[P.land] ? 'Jump' : 'Spin'; if (hb.firstChild.textContent !== jl) hb.firstChild.textContent = jl;
   if (hudT > 0) return; hudT = .25; P.shore = !INSIDE && !P.fly && !P.tow && atShore();
   let code = ''; for (const r of muniRings) { if (P.x < r.bb[0] || P.x > r.bb[2] || P.z < r.bb[1] || P.z > r.bb[3]) continue; if (inRing(r, P.x, P.z)) { code = r.code; break; } }
   const ll = xz2ll(P.x, P.z), loc = $('#loc'), m = DATA.muni[code];
@@ -360,21 +362,50 @@ function updateHud(dt) {
   $('#glass').textContent = S.glass;
   $('#buff').textContent = (P.buffT > 0 ? 'Māsan boost ' : '') + (P.luckT > 0 ? 'Shisa luck ×2' : '');
   $('#online').textContent = ROOM ? (onlineN > 1 ? onlineN + ' islanders online' : 'Online · just you so far') : 'Solo session';
-  // minimap, north up, 3.5 km radius
-  const S2 = 208, R = 3500, k = S2 / 2 / R; mc.fillStyle = '#1b8fee'; mc.fillRect(0, 0, S2, S2); mc.beginPath();
+  drawMini();
+}
+/* Minimap, north up. Small by default; hovering or tapping it makes it big, and the slider (or the mouse wheel) sets how much it shows. */
+let miniPin = false, miniHover = false;
+const miniBox = $('#miniBox'), miniZoom = $('#miniZoom');
+function miniRadius() { const v = S.miniZ === undefined ? 53 : clamp(+S.miniZ || 0, 0, 100); return 40000 * Math.pow(.01, v / 100); }      // 40 km zoomed right out, 400 m right in
+function drawMini() {
+  const S2 = mini.width, big = S2 > 300, R = miniRadius(), k = S2 / 2 / R; mc.fillStyle = '#1b8fee'; mc.fillRect(0, 0, S2, S2); mc.beginPath();
   for (const r of coastRings) { if (r.bb[2] < P.x - R || r.bb[0] > P.x + R || r.bb[3] < P.z - R || r.bb[1] > P.z + R) continue; for (let i = 0; i < r.n; i++) { const x = (r.xs[i] - P.x) * k + S2 / 2, y = (r.zs[i] - P.z) * k + S2 / 2; if (i) mc.lineTo(x, y); else mc.moveTo(x, y); } mc.closePath(); }
   mc.lineWidth = 9; mc.strokeStyle = 'rgba(110,245,225,.6)'; mc.lineJoin = 'round'; mc.stroke(); mc.fillStyle = '#8fe01f'; mc.fill(); mc.lineWidth = 1.5; mc.strokeStyle = '#fff6d8'; mc.stroke();
-  for (const p of PLACES) { if (p.dist > R) continue; mc.beginPath(); mc.arc((p.x - P.x) * k + S2 / 2, (p.z - P.z) * k + S2 / 2, 6, 0, 6.3); mc.fillStyle = S.stamps[p.id] ? '#19c8ff' : '#ff4fa3'; mc.fill(); mc.lineWidth = 2; mc.strokeStyle = '#fff'; mc.stroke(); }
+  const near = [];
+  for (const p of PLACES) { if (p.dist > R) continue; const x = (p.x - P.x) * k + S2 / 2, y = (p.z - P.z) * k + S2 / 2; near.push([p.dist, x, y, p.en]); mc.beginPath(); mc.arc(x, y, 6, 0, 6.3); mc.fillStyle = S.stamps[p.id] ? '#19c8ff' : '#ff4fa3'; mc.fill(); mc.lineWidth = 2; mc.strokeStyle = '#fff'; mc.stroke(); }
   for (const r of remotes.values()) { const dx = r.x - P.x, dz = r.z - P.z; if (Math.abs(dx) > R || Math.abs(dz) > R) continue; mc.beginPath(); mc.arc(dx * k + S2 / 2, dz * k + S2 / 2, 5, 0, 6.3); mc.fillStyle = '#eaff7a'; mc.fill(); mc.strokeStyle = '#2c9a14'; mc.stroke(); }
+  if (big) {      // room for names, a scale bar and a north mark
+    mc.font = '800 21px ' + getComputedStyle(document.body).fontFamily; mc.textAlign = 'center'; mc.textBaseline = 'bottom'; mc.lineJoin = 'round';
+    near.sort((a, b) => a[0] - b[0]); for (const q of near.slice(0, 7)) { const t = q[3].length > 22 ? q[3].slice(0, 21) + '…' : q[3]; mc.lineWidth = 5; mc.strokeStyle = 'rgba(255,255,255,.92)'; mc.strokeText(t, q[1], q[2] - 9); mc.fillStyle = '#0b3f9e'; mc.fillText(t, q[1], q[2] - 9); }
+    let bar = 100; for (const m of [200, 500, 1000, 2000, 5000, 10000, 20000]) if (m * k < S2 * .3) bar = m;
+    const bw = bar * k, bx = S2 / 2 - bw / 2, by = S2 - 54, lab = bar >= 1000 ? bar / 1000 + ' km' : bar + ' m';
+    mc.lineCap = 'round'; mc.beginPath(); mc.moveTo(bx, by); mc.lineTo(bx + bw, by); mc.lineWidth = 9; mc.strokeStyle = '#fff'; mc.stroke(); mc.lineWidth = 4; mc.strokeStyle = '#0b3f9e'; mc.stroke(); mc.lineCap = 'butt';
+    mc.lineWidth = 5; mc.strokeStyle = 'rgba(255,255,255,.92)'; mc.strokeText(lab, S2 / 2, by - 8); mc.fillStyle = '#0b3f9e'; mc.fillText(lab, S2 / 2, by - 8);
+    mc.strokeText('N', S2 / 2, 44); mc.fillText('N', S2 / 2, 44);
+  }
   mc.save(); mc.translate(S2 / 2, S2 / 2); mc.rotate(P.h); mc.beginPath(); mc.moveTo(0, -11); mc.lineTo(7, 8); mc.lineTo(0, 4); mc.lineTo(-7, 8); mc.closePath(); mc.fillStyle = '#fff'; mc.fill(); mc.lineWidth = 2; mc.strokeStyle = '#0a56d8'; mc.stroke(); mc.restore();
 }
+function miniSync() {
+  const big = miniPin || miniHover; if (miniBox.classList.contains('big') === big) return;
+  miniBox.classList.toggle('big', big); miniBox.parentNode.classList.toggle('front', big); $('#miniZoomRow').hidden = !big; mini.width = mini.height = big ? 600 : 208; drawMini();
+}
+function miniSetZoom(v, keep) { S.miniZ = clamp(Math.round(v), 0, 100); miniZoom.value = S.miniZ; drawMini(); if (keep) save(); }
+miniZoom.value = S.miniZ === undefined ? 53 : clamp(+S.miniZ || 0, 0, 100);
+miniBox.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') { miniHover = true; miniSync(); } });
+miniBox.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') { miniHover = false; miniSync(); } });
+mini.addEventListener('click', () => { miniPin = !miniPin; miniSync(); });      // a tap (or click) keeps it open; another closes it
+canvas.addEventListener('pointerdown', (e) => { if (miniPin && e.pointerType !== 'mouse') { miniPin = false; miniSync(); } });      // on a phone, touching the game closes it again
+miniBox.addEventListener('wheel', (e) => { e.preventDefault(); miniSetZoom((S.miniZ === undefined ? 53 : +S.miniZ) - Math.sign(e.deltaY) * 4, true); }, { passive: false });
+miniZoom.addEventListener('input', () => miniSetZoom(+miniZoom.value));
+miniZoom.addEventListener('change', () => { miniSetZoom(+miniZoom.value, true); miniZoom.blur(); });      // give the arrow keys back to the game
 
 /* ---------------- online presence ---------------- */
 let lastSent = '';
 function readPeer(pr) {
   const s = pr.presence || {}, num = (v) => typeof v === 'number' && isFinite(v); if (!num(s.x) || !num(s.z)) return null;
   const n = Array.isArray(s.n) ? [s.n[0] | 0, s.n[1] | 0] : [0, 0], c = num(s.c) ? clamp(Math.round(s.c), 0, 7) : 0;
-  return { x: clamp(s.x, -6e5, 6e5), z: clamp(s.z, -6e5, 6e5), y: num(s.y) ? clamp(s.y, -10, 600) : 0, h: num(s.h) ? s.h : 0, m: num(s.m) ? clamp(Math.round(s.m), 0, 12) : 0, i: num(s.i) ? s.i >>> 0 : 0, ix: num(s.ix) ? clamp(s.ix, -5, 5) : 0, iz: num(s.iz) ? clamp(s.iz, -5, 5) : 0, d: s.d ? 1 : 0, n, c, e: num(s.e) ? clamp(Math.round(s.e), 0, 2) : 0, et: num(s.et) ? s.et : 0, nk: n.join('_') + '_' + c };
+  return { x: clamp(s.x, -6e5, 6e5), z: clamp(s.z, -6e5, 6e5), y: num(s.y) ? clamp(s.y, -10, 600) : 0, h: num(s.h) ? s.h : 0, m: num(s.m) ? clamp(Math.round(s.m), 0, 12) : 0, i: num(s.i) ? s.i >>> 0 : 0, ix: num(s.ix) ? clamp(s.ix, -5, 5) : 0, iz: num(s.iz) ? clamp(s.iz, -5, 5) : 0, d: s.d ? 1 : 0, n, c, e: num(s.e) ? clamp(Math.round(s.e), 0, EMOTES.length - 1) : 0, j: num(s.j) ? s.j : 0, u: num(s.u) ? s.u : 0, uk: num(s.uk) ? clamp(Math.round(s.uk), 0, 3) : 0, q: Array.isArray(s.q) ? [clamp(s.q[0] | 0, 0, 15), clamp(s.q[1] | 0, 0, 2), s.q[2] ? 1 : 0] : [0, 0, 0], et: num(s.et) ? s.et : 0, nk: n.join('_') + '_' + c };
 }
 async function initRoom() {
   let room = null; try { room = window.claude && window.claude.use ? await window.claude.use('room') : null; } catch (e) { room = null; }
@@ -389,7 +420,7 @@ async function initRoom() {
   } catch (e) { ROOM = null; return; }
   setInterval(() => {
     if (!ROOM || !started) return;
-    const st = { x: Math.round(P.x * 10) / 10, z: Math.round(P.z * 10) / 10, y: Math.round(P.y * 10) / 10, h: Math.round(P.h * 100) / 100, m: INSIDE ? 8 : P.tow ? P.tow.K.m : P.fly ? 5 : P.mode === 'land' ? (LAND[P.land] ? LAND[P.land].m : 0) : CRAFTS.indexOf(P.craft) + 1, d: P.diving ? 1 : 0, n: S.name, c: S.color, e: P.emote, et: P.emoteT }; if (INSIDE) { st.i = INSIDE.id; st.ix = Math.round(INSIDE.x * 10) / 10; st.iz = Math.round(INSIDE.z * 10) / 10; }
+    const st = { x: Math.round(P.x * 10) / 10, z: Math.round(P.z * 10) / 10, y: Math.round(P.y * 10) / 10, h: Math.round(P.h * 100) / 100, m: INSIDE ? 8 : P.tow ? P.tow.K.m : P.fly ? 5 : P.mode === 'land' ? (LAND[P.land] ? LAND[P.land].m : 0) : CRAFTS.indexOf(P.craft) + 1, d: P.diving ? 1 : 0, n: S.name, c: S.color, e: P.emote, et: P.emoteT, j: P.jumpStamp || 0, u: P.useStamp || 0, uk: P.use || 0, q: gearCodes() }; if (INSIDE) { st.i = INSIDE.id; st.ix = Math.round(INSIDE.x * 10) / 10; st.iz = Math.round(INSIDE.z * 10) / 10; }
     const js = JSON.stringify(st); if (js === lastSent) return; lastSent = js; ROOM.presence(st).catch(() => {});
   }, 150);
 }
@@ -425,7 +456,7 @@ function frame(now) {
   applyMood(under);
   U.uRing.value.x = P.x - OX; U.uRing.value.y = P.z - OZ;
   water.position.set(P.x - OX, 0, P.z - OZ); deepPlane.position.x = P.x - OX; deepPlane.position.z = P.z - OZ; sky.position.copy(camera.position);
-  updatePlaces(tNow, P.x, P.z, S.stamps); updateFish(tNow, P.x, P.z); updateRemotes(dt, tNow); updateParticles(dt);
+  updatePlaces(tNow, P.x, P.z, S.stamps); updateFish(tNow, P.x, P.z); updateRemotes(dt, tNow); bagStep(dt); updateParticles(dt);
   if (myBubble) { myBubbleT -= dt; myBubble.position.set(me.position.x, me.position.y + 3.6 * me.scale.y, me.position.z); myBubble.scale.set(3.2 * me.scale.y, .92 * me.scale.y, 1); if (myBubbleT <= 0) { myBubble.removeFromParent(); myBubble = null; } }
   if (started && !chill) updateHud(dt);
   renderer.render(INSIDE ? inScene : scene, camera);
